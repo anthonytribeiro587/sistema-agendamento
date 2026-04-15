@@ -249,7 +249,11 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
 
             // se não é fim de semana do sistema, fica neutro
             const cls = st
-              ? `${base} ${statusClasses(st)} ${faded} ${clickable ? "cursor-pointer hover:brightness-110" : ""}`
+  ? `${base} ${statusClasses(st)} ${faded} ${
+      clickable
+        ? "cursor-pointer hover:brightness-110"
+        : "cursor-not-allowed opacity-80"
+    }`
               : `${base} bg-black/20 border-white/5 text-white/50 ${faded}`;
 
             return (
@@ -277,41 +281,57 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
       {/* DIREITA: formulário */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
         {!selectedWeekend ? (
-          <>
-            <p className="text-sm text-white/70">Fim de semana selecionado</p>
-            <h3 className="mt-1 text-2xl font-semibold text-white">
-              Nenhum fim de semana selecionado
-            </h3>
-            <p className="mt-2 text-white/60">
-              Selecione um fim de semana no calendário.
-            </p>
+  <>
+    <p className="text-sm text-white/70">Fim de semana selecionado</p>
+    <h3 className="mt-1 text-2xl font-semibold text-white">
+      Nenhum fim de semana selecionado
+    </h3>
+    <p className="mt-2 text-white/60">
+      Selecione um fim de semana no calendário.
+    </p>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
-              Selecione um fim de semana <b>disponível</b> para liberar o formulário.
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-white/70">Fim de semana selecionado</p>
-            <h3 className="mt-1 text-2xl font-semibold text-white">
-              {selectedTitle}
-            </h3>
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
+      Selecione um fim de semana <b>disponível</b> para liberar o formulário.
+    </div>
+  </>
+) : (
+  <>
+    <p className="text-sm text-white/70">Fim de semana selecionado</p>
+    <h3 className="mt-1 text-2xl font-semibold text-white">
+      {selectedTitle}
+    </h3>
 
-            <p className="mt-2 text-white/70">
-              Status:{" "}
-              <b className="text-emerald-200">
-                {selectedWeekend.status}
-              </b>
-            </p>
+    <p className="mt-2 text-white/70">
+      Status:{" "}
+      <b
+        className={
+          selectedWeekend.status === "AVAILABLE"
+            ? "text-emerald-200"
+            : selectedWeekend.status === "PENDING"
+            ? "text-amber-200"
+            : selectedWeekend.status === "RESERVED"
+            ? "text-rose-200"
+            : "text-white/70"
+        }
+      >
+        {selectedWeekend.status}
+      </b>
+    </p>
 
-            <div className="mt-5">
-              <BookingForm
-                weekendStartISO={selectedWeekend.weekendStartISO}
-                weekendEndISO={selectedWeekend.weekendEndISO}
-              />
-            </div>
-          </>
-        )}
+    <div className="mt-5">
+      {selectedWeekend.status === "AVAILABLE" ? (
+        <BookingForm
+          weekendStartISO={selectedWeekend.weekendStartISO}
+          weekendEndISO={selectedWeekend.weekendEndISO}
+        />
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
+          Este fim de semana não está disponível para solicitação.
+        </div>
+      )}
+    </div>
+  </>
+)}
       </div>
     </div>
   );

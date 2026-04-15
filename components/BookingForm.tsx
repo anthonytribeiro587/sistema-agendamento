@@ -44,7 +44,7 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
     if (!isEmail(form.email)) return false;
 
     const n = Number(form.peopleCount);
-    if (!n || n <= 0) return false;
+    if (!n || n < 40 || n > 140) return false;
 
     return true;
   }, [form]);
@@ -59,11 +59,12 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
     setErrMsg(null);
 
     if (!canSubmit) {
-      setErrMsg("Preencha os campos obrigatórios corretamente.");
+      setErrMsg("Preencha os campos obrigatórios corretamente. A quantidade deve ser entre 40 e 140 pessoas.");
       return;
     }
 
     setLoading(true);
+
     try {
       const payload = {
         weekendStartISO,
@@ -91,7 +92,21 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
 
       setOkMsg("Solicitação enviada! Status: PENDENTE.");
 
-      // limpa o form
+      const telefoneDestino = "5551995092781";
+
+      const mensagem = `Olá! Gostaria de solicitar uma reserva no Sítio Emanuel.
+
+*Dados da solicitação*
+• Igreja: ${form.churchName}
+• Responsável: ${form.contactName}
+• WhatsApp: ${form.phone}
+• E-mail: ${form.email}
+• Quantidade de pessoas: ${form.peopleCount}
+• Data: ${weekendStartISO} até ${weekendEndISO}
+• Observações: ${form.notes || "Nenhuma"}`;
+
+      const url = `https://wa.me/${telefoneDestino}?text=${encodeURIComponent(mensagem)}`;
+
       setForm({
         churchName: "",
         contactName: "",
@@ -101,17 +116,10 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
         notes: "",
       });
 
-      /**
-       * ✅ ESSENCIAL:
-       * força re-render do Server Component atual (rebusca do Supabase)
-       * Assim o calendário muda de AVAILABLE para PENDING sem precisar F5.
-       */
       router.refresh();
 
-      /**
-       * (Opcional) Se você quiser voltar automaticamente pro calendário:
-       * descomente a linha abaixo.
-       */
+      window.open(url, "_blank");
+
       // router.push("/disponibilidade");
     } catch (err: any) {
       setErrMsg(err?.message || "Erro inesperado.");
@@ -175,12 +183,16 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
         <label className="text-sm text-white/80">Quantidade de pessoas *</label>
         <input
           type="number"
-          min={1}
+          min={40}
+          max={140}
           value={form.peopleCount}
           onChange={(e) => onChange("peopleCount", e.target.value)}
           placeholder="Ex: 80"
           className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
         />
+          <p className="mt-1 text-xs text-white/50">
+            Permitido entre 40 e 140 pessoas.
+          </p>
       </div>
 
       <div>
@@ -212,7 +224,7 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
           disabled={!canSubmit || loading}
           className="rounded-2xl bg-white px-6 py-3 text-sm font-medium text-black hover:bg-white/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Enviando..." : "Enviar solicitação"}
+          {loading ? "Enviando..." : "Enviar e abrir WhatsApp"}
         </button>
 
         <p className="text-sm text-white/70">
