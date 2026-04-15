@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-const SLIDE_MS = 3500; // <-- DIMINUI/AUMENTA AQUI (ex: 2500 mais rápido)
+const SLIDE_MS = 3500;
 
 const PHOTOS = [
   "/fotos/1.jpeg",
@@ -27,9 +27,7 @@ export default function HomeHero() {
 
   return (
     <main className="w-full">
-      {/* HERO */}
       <section className="relative w-full">
-        {/* fundo */}
         <div className="relative mx-auto w-full max-w-6xl px-4 pt-6 sm:pt-10">
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-2xl">
             <div className="relative h-[70vh] min-h-[520px] sm:h-[72vh]">
@@ -41,10 +39,8 @@ export default function HomeHero() {
                 className="object-cover"
               />
 
-              {/* overlay para legibilidade (sem escurecer demais) */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/35 to-black/55" />
 
-              {/* conteúdo */}
               <div className="absolute inset-0 flex items-center justify-center px-5">
                 <div className="w-full max-w-3xl text-center">
                   <div className="mx-auto mb-5 flex items-center justify-center">
@@ -59,13 +55,13 @@ export default function HomeHero() {
                   </div>
 
                   <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-white drop-shadow">
-  Sítio Emanuel
-                </h1>
+                    Sítio Emanuel
+                  </h1>
 
-<p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg text-white/80">
-  Espaço para retiros, encontros e eventos. <br />
-  Consulte a disponibilidade e solicite sua reserva online.
-</p>
+                  <p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg text-white/80">
+                    Espaço para retiros, encontros e eventos. Consulte a disponibilidade
+                    e solicite sua reserva online.
+                  </p>
 
                   <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
@@ -74,16 +70,17 @@ export default function HomeHero() {
                     >
                       Ver disponibilidade
                     </Link>
+
                     <a
-  href="https://wa.me/5551995092781"
-  target="_blank"
-  className="inline-flex items-center justify-center rounded-2xl bg-green-500 px-7 py-3.5 text-sm font-semibold text-white hover:bg-green-600 transition"
->
-  Falar no WhatsApp
-</a>
+                      href="https://wa.me/5551999999999"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/5 px-7 py-3.5 text-sm font-medium text-white hover:bg-white/10 transition"
+                    >
+                      Falar no WhatsApp
+                    </a>
                   </div>
 
-                  {/* bolinhas do slider */}
                   <div className="mt-7 flex items-center justify-center gap-2">
                     {PHOTOS.map((_, i) => (
                       <button
@@ -101,27 +98,52 @@ export default function HomeHero() {
             </div>
           </div>
 
-          {/* cards */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-semibold text-white">Calendário</h3>
-              <p className="mt-2 text-sm text-white/70">
-                Datas disponíveis, pendentes e confirmadas.
+          <div className="mt-12">
+            <div className="mb-6 text-center">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-white">
+                Como funciona a reserva
+              </h2>
+              <p className="mt-2 text-sm sm:text-base text-white/70">
+                Consulte a disponibilidade, envie sua solicitação e continue o atendimento pelo WhatsApp.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-semibold text-white">Solicitação</h3>
-              <p className="mt-2 text-sm text-white/70">
-                Envie as informações da sua igreja em poucos minutos.
-              </p>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <span className="text-xs font-semibold tracking-[0.2em] text-white/40">
+                  01
+                </span>
+                <h3 className="mt-3 text-lg font-semibold text-white">
+                  Consulte as datas
+                </h3>
+                <p className="mt-2 text-sm text-white/70">
+                  Veja os fins de semana disponíveis e escolha a melhor opção para o seu evento.
+                </p>
+              </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h3 className="text-lg font-semibold text-white">Confirmação</h3>
-              <p className="mt-2 text-sm text-white/70">
-                Nossa equipe analisa e confirma o agendamento.
-              </p>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <span className="text-xs font-semibold tracking-[0.2em] text-white/40">
+                  02
+                </span>
+                <h3 className="mt-3 text-lg font-semibold text-white">
+                  Envie sua solicitação
+                </h3>
+                <p className="mt-2 text-sm text-white/70">
+                  Preencha o formulário com os dados do responsável, da organização e da data desejada.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <span className="text-xs font-semibold tracking-[0.2em] text-white/40">
+                  03
+                </span>
+                <h3 className="mt-3 text-lg font-semibold text-white">
+                  Continue no WhatsApp
+                </h3>
+                <p className="mt-2 text-sm text-white/70">
+                  Após o envio, o atendimento segue pelo WhatsApp para alinhar os detalhes da reserva.
+                </p>
+              </div>
             </div>
           </div>
 
