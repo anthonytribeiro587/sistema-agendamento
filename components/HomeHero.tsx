@@ -59,14 +59,13 @@ export default function HomeHero() {
                   </div>
 
                   <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-white drop-shadow">
-                    Agendamento de Retiros
-                    <span className="block mt-2 text-white/90">Sítio Emanuel</span>
-                  </h1>
+  Sítio Emanuel
+                </h1>
 
-                  <p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg text-white/80">
-                    Consulte o calendário, escolha um fim de semana disponível e envie sua
-                    solicitação. Nossa equipe confirma o agendamento.
-                  </p>
+<p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg text-white/80">
+  Espaço para retiros, encontros e eventos. <br />
+  Consulte a disponibilidade e solicite sua reserva online.
+</p>
 
                   <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
@@ -75,13 +74,13 @@ export default function HomeHero() {
                     >
                       Ver disponibilidade
                     </Link>
-
-                    <Link
-                      href="/admin"
-                      className="inline-flex items-center justify-center rounded-2xl border border-white/25 bg-white/5 px-7 py-3.5 text-sm font-medium text-white hover:bg-white/10 transition"
-                    >
-                      Área administrativa
-                    </Link>
+                    <a
+  href="https://wa.me/5551995092781"
+  target="_blank"
+  className="inline-flex items-center justify-center rounded-2xl bg-green-500 px-7 py-3.5 text-sm font-semibold text-white hover:bg-green-600 transition"
+>
+  Falar no WhatsApp
+</a>
                   </div>
 
                   {/* bolinhas do slider */}
