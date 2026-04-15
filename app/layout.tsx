@@ -1,5 +1,6 @@
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 export const metadata = {
   title: "Sítio Emanuel — Agendamentos",
@@ -21,6 +22,7 @@ export default function RootLayout({
         <main className="relative">
           {children}
         </main>
+        <WhatsAppButton />
       </body>
     </html>
   );
