@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabase/browser";
-
-type BookingStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+import AdminCalendarPanel, { AdminWeekendItem } from "@/components/AdminCalendarPanel";
 
 type Booking = {
   id: string;
@@ -32,39 +31,17 @@ function isAdminEmail(email: string | null | undefined) {
   return allowed.includes(email.toLowerCase());
 }
 
-function statusLabel(status: string) {
-  const up = (status || "").toUpperCase();
-  if (up === "PENDING") return "PENDENTE";
-  if (up === "CONFIRMED") return "CONFIRMADO";
-  if (up === "REJECTED") return "REJEITADO";
-  if (up === "CANCELLED") return "CANCELADO";
-  return up || "-";
-}
-
-function pillClass(status: string) {
-  const up = (status || "").toUpperCase();
-  const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs";
-
-  if (up === "CONFIRMED") return `${base} border-emerald-500/25 bg-emerald-500/10 text-emerald-200`;
-  if (up === "PENDING") return `${base} border-amber-500/25 bg-amber-500/10 text-amber-200`;
-  if (up === "REJECTED" || up === "CANCELLED")
-    return `${base} border-rose-500/25 bg-rose-500/10 text-rose-200`;
-
-  return `${base} border-white/10 bg-white/5 text-white/80`;
-}
-
-function formatBR(dateLike: string) {
-  try {
-    const dt = new Date(dateLike);
-    if (isNaN(dt.getTime())) return "-";
-    return dt.toLocaleDateString("pt-BR");
-  } catch {
-    return "-";
-  }
-}
-
 function btnBase() {
   return "inline-flex items-center justify-center rounded-2xl border px-4 py-2 text-sm font-medium transition whitespace-nowrap";
+}
+
+function adminStatusToWeekendStatus(
+  status: string
+): "AVAILABLE" | "PENDING" | "RESERVED" | "BLOCKED" {
+  const up = (status || "").toUpperCase();
+  if (up === "CONFIRMED") return "RESERVED";
+  if (up === "PENDING") return "PENDING";
+  return "AVAILABLE";
 }
 
 export default function AdminPage() {
@@ -113,7 +90,8 @@ export default function AdminPage() {
       setUserEmail(email);
 
       if (!isAdminEmail(email)) {
-        router.push("/");
+        setError("Seu usuário não tem permissão para acessar a área administrativa.");
+        setLoading(false);
         return;
       }
 
@@ -156,14 +134,54 @@ export default function AdminPage() {
     setRefreshing(false);
   }
 
-  if (loading) return <p className="text-white/70">Carregando painel...</p>;
+  const weekends = useMemo<AdminWeekendItem[]>(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 18, 0);
+
+    const items: AdminWeekendItem[] = [];
+    const cur = new Date(from);
+
+    while (cur.getDay() !== 5) {
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    while (cur <= to) {
+      const start = cur.toISOString().slice(0, 10);
+      const end = new Date(cur);
+      end.setDate(end.getDate() + 2);
+
+      const booking =
+        bookings.find((b) => b.weekend_start?.slice(0, 10) === start) ?? null;
+
+      items.push({
+        weekendStartISO: start,
+        weekendEndISO: end.toISOString().slice(0, 10),
+        status: booking ? adminStatusToWeekendStatus(booking.status) : "AVAILABLE",
+        booking,
+      });
+
+      cur.setDate(cur.getDate() + 7);
+    }
+
+    return items;
+  }, [bookings]);
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+        <p className="text-white/70">Carregando painel...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10 space-y-6">
-      {/* Topo */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Área Administrativa</h1>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            Área Administrativa
+          </h1>
           <p className="mt-2 text-sm text-white/70">
             Logado como <span className="text-white">{userEmail}</span>
           </p>
@@ -193,192 +211,21 @@ export default function AdminPage() {
         </p>
       )}
 
-      {/* Container */}
       <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Solicitações</h2>
-          <span className="text-sm text-white/60">{bookings.length} item(s)</span>
+          <h2 className="text-lg font-semibold">Agenda administrativa</h2>
+          <span className="text-sm text-white/60">{bookings.length} solicitação(ões)</span>
         </div>
 
-        {/* MOBILE: cards (resolve 100% o “tudo em cima”) */}
-        <div className="mt-5 space-y-3 md:hidden">
-          {bookings.length === 0 ? (
-            <div className="text-sm text-white/70">Nenhuma solicitação encontrada.</div>
-          ) : (
-            bookings.map((b) => {
-              const busy = savingId === b.id;
-              const up = (b.status || "").toUpperCase();
-
-              return (
-                <div key={b.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-white/60">Fim de semana</div>
-                      <div className="text-base font-semibold text-white">
-                        {formatBR(b.weekend_start)} → {formatBR(b.weekend_end)}
-                      </div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {b.created_at ? new Date(b.created_at).toLocaleString("pt-BR") : ""}
-                      </div>
-                    </div>
-
-                    <span className={pillClass(b.status)}>{statusLabel(b.status)}</span>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div className="col-span-2">
-                      <div className="text-xs text-white/60">Igreja</div>
-                      <div className="text-white break-words font-medium">{b.church_name}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-white/60">Pessoas</div>
-                      <div className="text-white">{b.people_count}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-white/60">E-mail</div>
-                      <div className="text-white break-words">{b.email}</div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div className="text-xs text-white/60">Contato</div>
-                      <div className="text-white break-words">
-                        {b.contact_name} {b.phone ? `• ${b.phone}` : ""}
-                      </div>
-                    </div>
-
-                    {b.notes ? (
-                      <div className="col-span-2">
-                        <div className="text-xs text-white/60">Observações</div>
-                        <div className="text-white/80 break-words">{b.notes}</div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {up === "PENDING" && (
-                      <>
-                        <button
-                          disabled={busy}
-                          onClick={() => updateStatus(b.id, "CONFIRMED")}
-                          className={`${btnBase()} border-emerald-500/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-60`}
-                        >
-                          {busy ? "..." : "Confirmar"}
-                        </button>
-
-                        <button
-                          disabled={busy}
-                          onClick={() => updateStatus(b.id, "REJECTED")}
-                          className={`${btnBase()} border-rose-500/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15 disabled:opacity-60`}
-                        >
-                          {busy ? "..." : "Rejeitar"}
-                        </button>
-                      </>
-                    )}
-
-                    {(up === "CONFIRMED" || up === "REJECTED") && (
-                      <button
-                        disabled={busy}
-                        onClick={() => updateStatus(b.id, "PENDING")}
-                        className={`${btnBase()} border-amber-500/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-60`}
-                      >
-                        {busy ? "..." : "Reabrir"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* DESKTOP: tabela (mantém o teu visual atual) */}
-        <div className="mt-5 hidden md:block overflow-x-auto">
-          <div className="min-w-[920px] rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
-            <div className="grid grid-cols-12 gap-2 border-b border-white/10 px-4 py-3 text-xs text-white/60">
-              <div className="col-span-3">Fim de semana</div>
-              <div className="col-span-3">Igreja</div>
-              <div className="col-span-2">Contato</div>
-              <div className="col-span-1">Pessoas</div>
-              <div className="col-span-1">Status</div>
-              <div className="col-span-2 text-right">Ações</div>
-            </div>
-
-            {bookings.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-white/70">Nenhuma solicitação encontrada.</div>
-            ) : (
-              bookings.map((b) => {
-                const busy = savingId === b.id;
-                const up = (b.status || "").toUpperCase();
-
-                return (
-                  <div
-                    key={b.id}
-                    className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5 items-center"
-                  >
-                    <div className="col-span-3 text-sm">
-                      {formatBR(b.weekend_start)} → {formatBR(b.weekend_end)}
-                      <div className="text-xs text-white/45">
-                        {b.created_at ? new Date(b.created_at).toLocaleString("pt-BR") : ""}
-                      </div>
-                    </div>
-
-                    <div className="col-span-3 text-sm font-medium break-words">{b.church_name}</div>
-
-                    <div className="col-span-2 text-sm text-white/80">
-                      <div className="break-words">{b.contact_name}</div>
-                      <div className="text-xs text-white/55 break-words">{b.phone}</div>
-                      <div className="text-xs text-white/55 break-words">{b.email}</div>
-                    </div>
-
-                    <div className="col-span-1 text-sm text-white/80">{b.people_count}</div>
-
-                    <div className="col-span-1">
-                      <span className={pillClass(b.status)}>{statusLabel(b.status)}</span>
-                    </div>
-
-                    <div className="col-span-2 flex justify-end gap-2 flex-wrap">
-                      {up === "PENDING" && (
-                        <>
-                          <button
-                            disabled={busy}
-                            onClick={() => updateStatus(b.id, "CONFIRMED")}
-                            className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-black hover:bg-white/90 transition disabled:opacity-60"
-                          >
-                            {busy ? "..." : "Confirmar"}
-                          </button>
-
-                          <button
-                            disabled={busy}
-                            onClick={() => updateStatus(b.id, "REJECTED")}
-                            className="rounded-xl border border-white/15 px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition disabled:opacity-60"
-                          >
-                            {busy ? "..." : "Rejeitar"}
-                          </button>
-                        </>
-                      )}
-
-                      {(up === "CONFIRMED" || up === "REJECTED") && (
-                        <button
-                          disabled={busy}
-                          onClick={() => updateStatus(b.id, "PENDING")}
-                          className="rounded-xl border border-white/15 px-3 py-2 text-xs text-white/80 hover:bg-white/10 transition disabled:opacity-60"
-                        >
-                          {busy ? "..." : "Reabrir"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <AdminCalendarPanel
+          weekends={weekends}
+          savingId={savingId}
+          onUpdateStatus={updateStatus}
+        />
 
         <p className="mt-6 text-xs text-white/50">
-          <b>Confirmar</b> = Reservado no calendário. <b>Rejeitar</b> marca como REJECTED.{" "}
-          <b>Reabrir</b> volta para PENDENTE.
+          <b>Confirmar</b> = Reservado no calendário. <b>Rejeitar</b> marca como
+          {" "}REJECTED. <b>Reabrir</b> volta para PENDENTE.
         </p>
       </div>
     </main>

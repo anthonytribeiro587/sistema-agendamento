@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
 function isAdminEmail(email: string | null | undefined) {
-  const allowed = (process.env.ADMIN_EMAILS || "")
+  const allowed = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
@@ -11,7 +11,10 @@ function isAdminEmail(email: string | null | undefined) {
   return allowed.includes(email.toLowerCase());
 }
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await ctx.params;
 
@@ -21,18 +24,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const email = userData.user?.email;
 
     if (!userData.user) {
-      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, message: "Não autenticado." },
+        { status: 401 }
+      );
     }
 
     if (!isAdminEmail(email)) {
-      return NextResponse.json({ ok: false, message: "Sem permissão." }, { status: 403 });
+      return NextResponse.json(
+        { ok: false, message: "Sem permissão." },
+        { status: 403 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));
     const status = String(body.status || "").toUpperCase();
 
     if (!["PENDING", "CONFIRMED", "REJECTED"].includes(status)) {
-      return NextResponse.json({ ok: false, message: "Status inválido." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: "Status inválido." },
+        { status: 400 }
+      );
     }
 
     const { error } = await supabase
@@ -41,7 +53,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       .eq("id", id);
 
     if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true });
