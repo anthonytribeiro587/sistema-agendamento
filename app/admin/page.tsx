@@ -19,6 +19,12 @@ type Booking = {
   notes?: string | null;
 };
 
+type BlockRow = {
+  weekend_start: string;
+  weekend_end: string;
+  reason?: string | null;
+};
+
 function isAdminEmail(email: string | null | undefined) {
   const allowed = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
     .split(",")
@@ -51,27 +57,41 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [error, setError] = useState<string>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadBookings = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setError("");
 
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select(
-        "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
-      )
-      .order("created_at", { ascending: false });
+    const [{ data: bookingRows, error: bookingError }, { data: blockRows, error: blockError }] =
+      await Promise.all([
+        supabase
+          .from("bookings")
+          .select(
+            "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
+          )
+          .order("created_at", { ascending: false }),
+        supabase.from("blocks").select("weekend_start, weekend_end, reason"),
+      ]);
 
-    if (error) {
-      setError(error.message);
+    if (bookingError) {
+      setError(bookingError.message);
       setBookings([]);
+      setBlocks([]);
       return;
     }
 
-    setBookings((rows as Booking[]) || []);
+    if (blockError) {
+      setError(blockError.message);
+      setBookings([]);
+      setBlocks([]);
+      return;
+    }
+
+    setBookings((bookingRows as Booking[]) || []);
+    setBlocks((blockRows as BlockRow[]) || []);
   }, [supabase]);
 
   useEffect(() => {
@@ -95,19 +115,84 @@ export default function AdminPage() {
         return;
       }
 
-      await loadBookings();
+      await loadData();
       setLoading(false);
     }
 
     init();
-  }, [router, supabase, loadBookings]);
+  }, [router, supabase, loadData]);
+
+  async function blockWeekend(weekendStartISO: string, reason: string) {
+    setError("");
+
+    const res = await fetch("/api/blocks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekendStartISO, reason }),
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => null);
+      setError(j?.message || j?.error || "Falha ao bloquear data.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function unblockWeekend(weekendStartISO: string) {
+    setError("");
+
+    const res = await fetch("/api/blocks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekendStartISO }),
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => null);
+      setError(j?.message || j?.error || "Falha ao desbloquear data.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function createManualBooking(payload: {
+    weekendStartISO: string;
+    churchName: string;
+    contactName: string;
+    phone: string;
+    email: string;
+    peopleCount: string;
+    notes: string;
+  }) {
+    setError("");
+
+    const res = await fetch("/api/bookings/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => null);
+      setError(j?.message || j?.error || "Falha ao criar reserva manual.");
+      return;
+    }
+
+    await loadData();
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
   }
 
-  async function updateStatus(id: string, status: "CONFIRMED" | "REJECTED" | "PENDING") {
+  async function updateStatus(
+    id: string,
+    status: "CONFIRMED" | "REJECTED" | "PENDING"
+  ) {
     setError("");
     setSavingId(id);
 
@@ -125,12 +210,12 @@ export default function AdminPage() {
       return;
     }
 
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
+    await loadData();
   }
 
   async function onRefresh() {
     setRefreshing(true);
-    await loadBookings();
+    await loadData();
     setRefreshing(false);
   }
 
@@ -138,6 +223,10 @@ export default function AdminPage() {
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const to = new Date(now.getFullYear(), now.getMonth() + 18, 0);
+
+    const blockMap = new Map(
+      blocks.map((b) => [String(b.weekend_start).slice(0, 10), b] as const)
+    );
 
     const items: AdminWeekendItem[] = [];
     const cur = new Date(from);
@@ -154,18 +243,29 @@ export default function AdminPage() {
       const booking =
         bookings.find((b) => b.weekend_start?.slice(0, 10) === start) ?? null;
 
+      const block = blockMap.get(start) ?? null;
+
+      let status: "AVAILABLE" | "PENDING" | "RESERVED" | "BLOCKED" = "AVAILABLE";
+
+      if (block) {
+        status = "BLOCKED";
+      } else if (booking) {
+        status = adminStatusToWeekendStatus(booking.status);
+      }
+
       items.push({
         weekendStartISO: start,
         weekendEndISO: end.toISOString().slice(0, 10),
-        status: booking ? adminStatusToWeekendStatus(booking.status) : "AVAILABLE",
+        status,
         booking,
+        blockReason: block?.reason ?? null,
       });
 
       cur.setDate(cur.getDate() + 7);
     }
 
     return items;
-  }, [bookings]);
+  }, [bookings, blocks]);
 
   if (loading) {
     return (
@@ -221,11 +321,14 @@ export default function AdminPage() {
           weekends={weekends}
           savingId={savingId}
           onUpdateStatus={updateStatus}
+          onBlockWeekend={blockWeekend}
+          onUnblockWeekend={unblockWeekend}
+          onCreateManualBooking={createManualBooking}
         />
 
         <p className="mt-6 text-xs text-white/50">
-          <b>Confirmar</b> = Reservado no calendário. <b>Rejeitar</b> marca como
-          {" "}REJECTED. <b>Reabrir</b> volta para PENDENTE.
+          <b>Confirmar</b> = Reservado no calendário. <b>Rejeitar</b> marca como{" "}
+          REJECTED. <b>Reabrir</b> volta para PENDENTE.
         </p>
       </div>
     </main>

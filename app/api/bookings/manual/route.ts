@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../lib/supabase";
+import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+
+function isAdminEmail(email: string | null | undefined) {
+  const allowed = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!email) return false;
+  return allowed.includes(email.toLowerCase());
+}
 
 function isISODate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -19,6 +29,25 @@ function normalizePhone(value: unknown) {
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+
+    const { data: userData } = await supabase.auth.getUser();
+    const emailAdmin = userData.user?.email;
+
+    if (!userData.user) {
+      return NextResponse.json(
+        { ok: false, message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    if (!isAdminEmail(emailAdmin)) {
+      return NextResponse.json(
+        { ok: false, message: "Sem permissão." },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => null);
 
     if (!body || typeof body !== "object") {
@@ -92,16 +121,15 @@ export async function POST(req: Request) {
     const weekendStartFormatted = weekendStart.toISOString().slice(0, 10);
     const weekendEndFormatted = weekendEnd.toISOString().slice(0, 10);
 
-    // 1) verificar se está bloqueado manualmente
     const { data: blockRow, error: blockError } = await supabase
       .from("blocks")
-      .select("weekend_start")
+      .select("id")
       .eq("weekend_start", weekendStartFormatted)
       .maybeSingle();
 
     if (blockError) {
       return NextResponse.json(
-        { ok: false, message: `Erro ao verificar bloqueios: ${blockError.message}` },
+        { ok: false, message: blockError.message },
         { status: 500 }
       );
     }
@@ -113,7 +141,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) verificar se já existe booking pendente ou confirmado para o mesmo fim de semana
     const { data: existingBookings, error: existingError } = await supabase
       .from("bookings")
       .select("id, status")
@@ -122,7 +149,7 @@ export async function POST(req: Request) {
 
     if (existingError) {
       return NextResponse.json(
-        { ok: false, message: `Erro ao verificar disponibilidade: ${existingError.message}` },
+        { ok: false, message: existingError.message },
         { status: 500 }
       );
     }
@@ -131,13 +158,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          message: "Este fim de semana já possui uma solicitação pendente ou reserva confirmada.",
+          message: "Este fim de semana já possui solicitação pendente ou reserva confirmada.",
         },
         { status: 409 }
       );
     }
 
-    const payload = {
+    const { error } = await supabase.from("bookings").insert({
       weekend_start: weekendStartFormatted,
       weekend_end: weekendEndFormatted,
       church_name: churchName,
@@ -146,25 +173,20 @@ export async function POST(req: Request) {
       email,
       people_count: peopleCount,
       notes,
-      status: "PENDING",
-    };
-
-    const { error } = await supabase.from("bookings").insert(payload);
+      status: "CONFIRMED",
+    });
 
     if (error) {
       return NextResponse.json(
-        { ok: false, message: `Erro ao salvar solicitação: ${error.message}` },
+        { ok: false, message: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      message: "Solicitação enviada com sucesso.",
-    });
-  } catch (err: any) {
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
     return NextResponse.json(
-      { ok: false, message: err?.message || "Erro ao processar." },
+      { ok: false, message: e?.message || "Erro inesperado." },
       { status: 500 }
     );
   }
