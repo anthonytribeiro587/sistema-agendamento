@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import AdminCalendarPanel, {
   AdminWeekendItem,
@@ -60,7 +60,8 @@ function consolidatedWeekendStatus(
 export default function AdminAgendaPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
-
+  const searchParams = useSearchParams();
+  const initialWeekend = searchParams.get("weekend") || "";
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -304,21 +305,29 @@ export default function AdminAgendaPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-60`}
-          >
-            {refreshing ? "Atualizando..." : "Atualizar"}
-          </button>
+  <button
+    type="button"
+    onClick={() => router.push("/admin")}
+    className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10`}
+  >
+    Voltar ao dashboard
+  </button>
 
-          <button
-            onClick={handleLogout}
-            className={`${btnBase()} border-white/15 bg-black/30 text-white/80 hover:bg-white/10`}
-          >
-            Sair
-          </button>
-        </div>
+  <button
+    onClick={onRefresh}
+    disabled={refreshing}
+    className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-60`}
+  >
+    {refreshing ? "Atualizando..." : "Atualizar"}
+  </button>
+
+  <button
+    onClick={handleLogout}
+    className={`${btnBase()} border-white/15 bg-black/30 text-white/80 hover:bg-white/10`}
+  >
+    Sair
+  </button>
+</div>
       </div>
 
       {error && (
@@ -334,13 +343,14 @@ export default function AdminAgendaPage() {
         </div>
 
         <AdminCalendarPanel
-          weekends={weekends}
-          savingId={savingId}
-          onUpdateStatus={updateStatus}
-          onBlockWeekend={blockWeekend}
-          onUnblockWeekend={unblockWeekend}
-          onCreateManualBooking={createManualBooking}
-        />
+  weekends={weekends}
+  initialSelectedWeekendStartISO={initialWeekend}
+  savingId={savingId}
+  onUpdateStatus={updateStatus}
+  onBlockWeekend={blockWeekend}
+  onUnblockWeekend={unblockWeekend}
+  onCreateManualBooking={createManualBooking}
+/>
 
         <p className="mt-6 text-xs text-white/50">
           Uma data pode ter várias solicitações no histórico. A agenda exibe o status consolidado

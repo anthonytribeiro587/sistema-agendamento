@@ -10,12 +10,12 @@ export default function Navbar() {
             {/* Logo maior */}
             <div className="relative h-11 w-11 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
               <Image
-                src="/logo-sitio-emanuel.png"
-                alt="Sítio Emanuel"
-                fill
-                className="object-contain p-1.5"
-                priority
-              />
+  src="/logo-sitio-emanuel.png"
+  alt="Sítio Emanuel"
+  fill
+  className="object-contain p-1.5"
+  sizes="44px"
+/>
             </div>
 
             <div className="leading-tight">

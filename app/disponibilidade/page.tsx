@@ -4,7 +4,7 @@ import DisponibilidadeCalendarClient, {
 } from "@/components/DisponibilidadeCalendarClient";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type BookingRow = {
   weekend_start: string | null;

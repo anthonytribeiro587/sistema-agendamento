@@ -33,12 +33,13 @@ export default function HomeHero() {
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-2xl">
             <div className="relative h-[62vh] min-h-[460px] sm:h-[64vh]">
               <Image
-                src={current}
-                alt="Sítio Emanuel"
-                fill
-                priority
-                className="object-cover"
-              />
+  src={current}
+  alt="Sítio Emanuel"
+  fill
+  priority={idx === 0}
+  className="object-cover"
+  sizes="100vw"
+/>
 
               <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/35 to-black/55" />
 
@@ -47,11 +48,12 @@ export default function HomeHero() {
                   <div className="mx-auto mb-5 flex items-center justify-center">
                     <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl border border-white/15 bg-black/25 backdrop-blur">
                       <Image
-                        src="/logo-sitio-emanuel.png"
-                        alt="Sítio Emanuel"
-                        fill
-                        className="object-contain p-2.5"
-                      />
+  src="/logo-sitio-emanuel.png"
+  alt="Sítio Emanuel"
+  fill
+  className="object-contain p-2.5"
+  sizes="64px"
+/>
                     </div>
                   </div>
 

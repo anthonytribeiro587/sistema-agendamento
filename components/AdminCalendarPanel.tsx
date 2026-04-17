@@ -29,6 +29,7 @@ export type AdminWeekendItem = {
 
 type Props = {
   weekends: AdminWeekendItem[];
+  initialSelectedWeekendStartISO?: string;
   savingId: string | null;
   onUpdateStatus: (
     id: string,
@@ -143,6 +144,7 @@ function bookingLabel(status: string) {
 
 export default function AdminCalendarPanel({
   weekends,
+  initialSelectedWeekendStartISO = "",
   savingId,
   onUpdateStatus,
   onBlockWeekend,
@@ -202,6 +204,19 @@ export default function AdminCalendarPanel({
     if (!selectedWeekendStartISO) return null;
     return weekendByStart.get(selectedWeekendStartISO) ?? null;
   }, [selectedWeekendStartISO, weekendByStart]);
+
+  useEffect(() => {
+  if (!initialSelectedWeekendStartISO) return;
+  if (!weekendByStart.has(initialSelectedWeekendStartISO)) return;
+
+  setSelectedWeekendStartISO(initialSelectedWeekendStartISO);
+
+  const [year, month] = initialSelectedWeekendStartISO.split("-").map(Number);
+  if (!year || !month) return;
+
+  setViewYear(year);
+  setViewMonth0(month - 1);
+}, [initialSelectedWeekendStartISO, weekendByStart]);
 
   useEffect(() => {
     if (selectedWeekend?.status === "BLOCKED") {
@@ -356,7 +371,7 @@ export default function AdminCalendarPanel({
                   clickable ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-80"
                 } ${selected ? "ring-2 ring-white/70" : ""}`
               : `${base} bg-black/20 border-white/5 text-white/50 ${faded}`;
-
+            
             return (
               <div
                 key={c.iso}

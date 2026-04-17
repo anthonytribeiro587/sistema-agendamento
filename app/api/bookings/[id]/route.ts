@@ -11,6 +11,8 @@ function isAdminEmail(email: string | null | undefined) {
   return allowed.includes(email.toLowerCase());
 }
 
+const ALLOWED_STATUS = ["PENDING", "CONFIRMED", "REJECTED", "CANCELLED"] as const;
+
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -20,8 +22,15 @@ export async function PATCH(
 
     const supabase = await createSupabaseServerClient();
 
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
     const email = userData.user?.email;
+
+    if (userError) {
+      return NextResponse.json(
+        { ok: false, message: userError.message },
+        { status: 500 }
+      );
+    }
 
     if (!userData.user) {
       return NextResponse.json(
@@ -38,16 +47,18 @@ export async function PATCH(
     }
 
     const body = await req.json().catch(() => ({}));
-    const status = String(body.status || "").toUpperCase();
+    const status = String(body.status || "").trim().toUpperCase();
 
-    if (!["PENDING", "CONFIRMED", "REJECTED"].includes(status)) {
+    if (!ALLOWED_STATUS.includes(status as (typeof ALLOWED_STATUS)[number])) {
       return NextResponse.json(
-        { ok: false, message: "Status inválido." },
+        {
+          ok: false,
+          message: "Status inválido. Use PENDING, CONFIRMED, REJECTED ou CANCELLED.",
+        },
         { status: 400 }
       );
     }
 
-    // Buscar booking alvo
     const { data: targetBooking, error: targetError } = await supabase
       .from("bookings")
       .select("id, weekend_start, status")
@@ -147,19 +158,43 @@ export async function PATCH(
     }
 
     // REJECTED: rejeita só a selecionada
-    const { error } = await supabase
-      .from("bookings")
-      .update({ status: "REJECTED" })
-      .eq("id", id);
+    if (status === "REJECTED") {
+      const { error: rejectError } = await supabase
+        .from("bookings")
+        .update({ status: "REJECTED" })
+        .eq("id", id);
 
-    if (error) {
-      return NextResponse.json(
-        { ok: false, message: error.message },
-        { status: 500 }
-      );
+      if (rejectError) {
+        return NextResponse.json(
+          { ok: false, message: rejectError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ ok: true });
     }
 
-    return NextResponse.json({ ok: true });
+    // CANCELLED: cancela só a selecionada
+    if (status === "CANCELLED") {
+      const { error: cancelError } = await supabase
+        .from("bookings")
+        .update({ status: "CANCELLED" })
+        .eq("id", id);
+
+      if (cancelError) {
+        return NextResponse.json(
+          { ok: false, message: cancelError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json(
+      { ok: false, message: "Operação não suportada." },
+      { status: 400 }
+    );
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, message: e?.message || "Erro inesperado." },
