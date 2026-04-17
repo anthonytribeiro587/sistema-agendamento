@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import AdminCalendarPanel, {
@@ -57,11 +57,12 @@ function consolidatedWeekendStatus(
   return "AVAILABLE";
 }
 
-export default function AdminAgendaPage() {
+function AdminAgendaContent() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialWeekend = searchParams.get("weekend") || "";
+
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -71,41 +72,40 @@ export default function AdminAgendaPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
-  setError("");
+    setError("");
 
-  // primeiro saneia pendências antigas
-  await fetch("/api/bookings/expire-pending", {
-    method: "POST",
-  }).catch(() => null);
+    await fetch("/api/bookings/expire-pending", {
+      method: "POST",
+    }).catch(() => null);
 
-  const [{ data: bookingRows, error: bookingError }, { data: blockRows, error: blockError }] =
-    await Promise.all([
-      supabase
-        .from("bookings")
-        .select(
-          "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
-        )
-        .order("created_at", { ascending: false }),
-      supabase.from("blocks").select("weekend_start, weekend_end, reason"),
-    ]);
+    const [{ data: bookingRows, error: bookingError }, { data: blockRows, error: blockError }] =
+      await Promise.all([
+        supabase
+          .from("bookings")
+          .select(
+            "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
+          )
+          .order("created_at", { ascending: false }),
+        supabase.from("blocks").select("weekend_start, weekend_end, reason"),
+      ]);
 
-  if (bookingError) {
-    setError(bookingError.message);
-    setBookings([]);
-    setBlocks([]);
-    return;
-  }
+    if (bookingError) {
+      setError(bookingError.message);
+      setBookings([]);
+      setBlocks([]);
+      return;
+    }
 
-  if (blockError) {
-    setError(blockError.message);
-    setBookings([]);
-    setBlocks([]);
-    return;
-  }
+    if (blockError) {
+      setError(blockError.message);
+      setBookings([]);
+      setBlocks([]);
+      return;
+    }
 
-  setBookings((bookingRows as Booking[]) || []);
-  setBlocks((blockRows as BlockRow[]) || []);
-}, [supabase]);
+    setBookings((bookingRows as Booking[]) || []);
+    setBlocks((blockRows as BlockRow[]) || []);
+  }, [supabase]);
 
   useEffect(() => {
     async function init() {
@@ -293,10 +293,10 @@ export default function AdminAgendaPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:py-10 space-y-6">
+    <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:py-10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Agenda administrativa
           </h1>
           <p className="mt-2 text-sm text-white/70">
@@ -305,29 +305,29 @@ export default function AdminAgendaPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-  <button
-    type="button"
-    onClick={() => router.push("/admin")}
-    className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10`}
-  >
-    Voltar ao dashboard
-  </button>
+          <button
+            type="button"
+            onClick={() => router.push("/admin")}
+            className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10`}
+          >
+            Voltar ao dashboard
+          </button>
 
-  <button
-    onClick={onRefresh}
-    disabled={refreshing}
-    className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-60`}
-  >
-    {refreshing ? "Atualizando..." : "Atualizar"}
-  </button>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-60`}
+          >
+            {refreshing ? "Atualizando..." : "Atualizar"}
+          </button>
 
-  <button
-    onClick={handleLogout}
-    className={`${btnBase()} border-white/15 bg-black/30 text-white/80 hover:bg-white/10`}
-  >
-    Sair
-  </button>
-</div>
+          <button
+            onClick={handleLogout}
+            className={`${btnBase()} border-white/15 bg-black/30 text-white/80 hover:bg-white/10`}
+          >
+            Sair
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -343,14 +343,14 @@ export default function AdminAgendaPage() {
         </div>
 
         <AdminCalendarPanel
-  weekends={weekends}
-  initialSelectedWeekendStartISO={initialWeekend}
-  savingId={savingId}
-  onUpdateStatus={updateStatus}
-  onBlockWeekend={blockWeekend}
-  onUnblockWeekend={unblockWeekend}
-  onCreateManualBooking={createManualBooking}
-/>
+          weekends={weekends}
+          initialSelectedWeekendStartISO={initialWeekend}
+          savingId={savingId}
+          onUpdateStatus={updateStatus}
+          onBlockWeekend={blockWeekend}
+          onUnblockWeekend={unblockWeekend}
+          onCreateManualBooking={createManualBooking}
+        />
 
         <p className="mt-6 text-xs text-white/50">
           Uma data pode ter várias solicitações no histórico. A agenda exibe o status consolidado
@@ -358,5 +358,19 @@ export default function AdminAgendaPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function AdminAgendaPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
+          <p className="text-white/70">Carregando agenda...</p>
+        </main>
+      }
+    >
+      <AdminAgendaContent />
+    </Suspense>
   );
 }
