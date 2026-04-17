@@ -116,36 +116,40 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
 
   // montar grade do mês (42 células)
   const cells = useMemo(() => {
-    const first = new Date(viewYear, viewMonth0, 1);
-    const daysInMonth = new Date(viewYear, viewMonth0 + 1, 0).getDate();
+  const first = new Date(viewYear, viewMonth0, 1);
+  const startOffset = mondayIndex(first.getDay());
 
-    const startOffset = mondayIndex(first.getDay()); // 0..6
-    const total = 42;
+  const start = new Date(viewYear, viewMonth0, 1 - startOffset);
 
-    const list: Array<{
-      iso: string;
-      day: number;
-      inMonth: boolean;
-    }> = [];
+  const list: Array<{
+    iso: string;
+    day: number;
+    inMonth: boolean;
+  }> = [];
 
-    // data inicial da grade
-    const start = new Date(viewYear, viewMonth0, 1 - startOffset);
+  for (let i = 0; i < 42; i++) {
+    const dt = new Date(start);
+    dt.setDate(start.getDate() + i);
 
-    for (let i = 0; i < total; i++) {
-      const dt = new Date(start);
-      dt.setDate(start.getDate() + i);
+    list.push({
+      iso: dt.toISOString().slice(0, 10),
+      day: dt.getDate(),
+      inMonth: dt.getMonth() === viewMonth0,
+    });
+  }
 
-      const iso = dt.toISOString().slice(0, 10);
-      const inMonth = dt.getMonth() === viewMonth0;
-      list.push({
-        iso,
-        day: dt.getDate(),
-        inMonth,
-      });
-    }
+  const weeks: typeof list[] = [];
+  for (let i = 0; i < list.length; i += 7) {
+    weeks.push(list.slice(i, i + 7));
+  }
 
-    return { startOffset, daysInMonth, list };
-  }, [viewYear, viewMonth0]);
+  // mantém só semanas que têm pelo menos 1 dia do mês atual
+  const filteredWeeks = weeks.filter((week) =>
+    week.some((day) => day.inMonth)
+  );
+
+  return filteredWeeks.flat();
+}, [viewYear, viewMonth0]);
 
   function prevMonth() {
     const dt = new Date(viewYear, viewMonth0, 1);
@@ -237,41 +241,39 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
         </div>
 
         <div className="mt-3 grid grid-cols-7 gap-2">
-          {cells.list.map((c) => {
-            const st = dayStatus.get(c.iso);
-            const isWeekendDay = Boolean(dayToWeekendStart.get(c.iso)); // sex/sáb/dom que fazem parte de um weekend
-            const clickable =
-              isWeekendDay && st === "AVAILABLE" && c.inMonth; // clique só em disponíveis
+  {cells.map((c) => {
+    const st = dayStatus.get(c.iso);
+    const isWeekendDay = Boolean(dayToWeekendStart.get(c.iso));
+    const clickable =
+      isWeekendDay && st === "AVAILABLE";
 
-            const base =
-              "h-12 rounded-2xl border text-center text-sm flex items-center justify-center select-none transition";
-            const faded = c.inMonth ? "" : "opacity-40";
+    const isOtherMonth = !c.inMonth;
 
-            // se não é fim de semana do sistema, fica neutro
-            const cls = st
-  ? `${base} ${statusClasses(st)} ${faded} ${
-      clickable
-        ? "cursor-pointer hover:brightness-110"
-        : "cursor-not-allowed opacity-80"
-    }`
-              : `${base} bg-black/20 border-white/5 text-white/50 ${faded}`;
+    const base =
+      "h-12 rounded-2xl border text-center text-sm flex items-center justify-center select-none transition";
 
-            return (
-              <div
-                key={c.iso}
-                className={cls}
-                onClick={clickable ? () => onClickDay(c.iso) : undefined}
-                title={
-                  st
-                    ? `${formatDateBR(c.iso)} — ${st}`
-                    : formatDateBR(c.iso)
-                }
-              >
-                {c.day}
-              </div>
-            );
-          })}
-        </div>
+    const monthStyle = isOtherMonth
+      ? "opacity-70 text-white/70"
+      : "";
+
+    const cls = st
+      ? `${base} ${statusClasses(st)} ${monthStyle} ${
+          clickable ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-80"
+        }`
+      : `${base} bg-black/20 border-white/5 text-white/50 ${monthStyle}`;
+
+    return (
+      <div
+        key={c.iso}
+        className={cls}
+        onClick={clickable ? () => onClickDay(c.iso) : undefined}
+        title={st ? `${formatDateBR(c.iso)} — ${st}` : formatDateBR(c.iso)}
+      >
+        {c.day}
+      </div>
+    );
+  })}
+</div>
 
         <p className="mt-3 text-xs text-white/60">
           * Clique em <b>Sex/Sáb/Dom</b> (verde) para solicitar.

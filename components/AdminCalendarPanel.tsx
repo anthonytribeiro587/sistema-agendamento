@@ -23,7 +23,7 @@ export type AdminWeekendItem = {
   weekendStartISO: string;
   weekendEndISO: string;
   status: WeekendStatus;
-  booking?: AdminBooking | null;
+  bookings: AdminBooking[];
   blockReason?: string | null;
 };
 
@@ -61,8 +61,14 @@ function addDaysISO(iso: string, days: number) {
 function formatDateBR(iso: string) {
   if (!iso || !isISODate(iso)) return "";
   const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("pt-BR");
+  return `${d.toString().padStart(2, "0")}/${m.toString().padStart(2, "0")}/${y}`;
+}
+
+function formatWeekendRange(startISO: string, endISO: string) {
+  const start = formatDateBR(startISO);
+  const end = formatDateBR(endISO);
+  if (!start || !end) return "-";
+  return `${start} → ${end} (Sex—Dom)`;
 }
 
 function formatDateTimeBR(dateLike: string) {
@@ -108,6 +114,31 @@ function badgeClasses(status: WeekendStatus) {
     return "bg-rose-500/20 border-rose-400/25 text-rose-200";
   }
   return "bg-white/5 border-white/10 text-white/70";
+}
+
+function bookingPillClass(status: string) {
+  const up = (status || "").toUpperCase();
+  const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs";
+
+  if (up === "CONFIRMED") {
+    return `${base} border-rose-500/25 bg-rose-500/10 text-rose-200`;
+  }
+  if (up === "PENDING") {
+    return `${base} border-amber-500/25 bg-amber-500/10 text-amber-200`;
+  }
+  if (up === "REJECTED") {
+    return `${base} border-white/15 bg-white/5 text-white/70`;
+  }
+
+  return `${base} border-white/10 bg-white/5 text-white/70`;
+}
+
+function bookingLabel(status: string) {
+  const up = (status || "").toUpperCase();
+  if (up === "CONFIRMED") return "CONFIRMADO";
+  if (up === "PENDING") return "PENDENTE";
+  if (up === "REJECTED") return "REJEITADO";
+  return up || "-";
 }
 
 export default function AdminCalendarPanel({
@@ -190,6 +221,20 @@ export default function AdminCalendarPanel({
     });
   }, [selectedWeekend]);
 
+  const activeBookings = useMemo(() => {
+    if (!selectedWeekend) return [];
+    return selectedWeekend.bookings.filter((b) =>
+      ["PENDING", "CONFIRMED"].includes((b.status || "").toUpperCase())
+    );
+  }, [selectedWeekend]);
+
+  const historicalBookings = useMemo(() => {
+    if (!selectedWeekend) return [];
+    return selectedWeekend.bookings.filter(
+      (b) => !["PENDING", "CONFIRMED"].includes((b.status || "").toUpperCase())
+    );
+  }, [selectedWeekend]);
+
   const cells = useMemo(() => {
     const first = new Date(viewYear, viewMonth0, 1);
     const startOffset = mondayIndex(first.getDay());
@@ -242,20 +287,8 @@ export default function AdminCalendarPanel({
     { id: "sun", label: "D" },
   ];
 
-  const booking = selectedWeekend?.booking ?? null;
-  const bookingStatus = booking?.status?.toUpperCase() ?? "";
-  const weekendStatus = selectedWeekend?.status ?? "AVAILABLE";
-
-  const whatsappHref = booking?.phone
-    ? `https://wa.me/${booking.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Olá, ${booking.contact_name}! Sobre sua solicitação para o Sítio Emanuel no período de ${formatDateBR(
-          booking.weekend_start
-        )} até ${formatDateBR(booking.weekend_end)}, gostaríamos de falar com você.`
-      )}`
-    : null;
-
   return (
-    <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+    <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full border px-3 py-1 text-sm ${badgeClasses("AVAILABLE")}`}>
@@ -320,9 +353,7 @@ export default function AdminCalendarPanel({
 
             const cls = st
               ? `${base} ${statusClasses(st)} ${faded} ${
-                  clickable
-                    ? "cursor-pointer hover:brightness-110"
-                    : "cursor-not-allowed opacity-80"
+                  clickable ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-80"
                 } ${selected ? "ring-2 ring-white/70" : ""}`
               : `${base} bg-black/20 border-white/5 text-white/50 ${faded}`;
 
@@ -340,7 +371,7 @@ export default function AdminCalendarPanel({
         </div>
 
         <p className="mt-3 text-xs text-white/60">
-          * Clique em um fim de semana para visualizar e gerenciar a agenda.
+          * Clique em um fim de semana para visualizar e gerenciar todas as solicitações da data.
         </p>
       </div>
 
@@ -352,150 +383,246 @@ export default function AdminCalendarPanel({
               Nenhum fim de semana selecionado
             </h3>
             <p className="mt-2 text-white/60">
-              Clique em um fim de semana no calendário para ver os detalhes.
+              Clique em um fim de semana no calendário para ver as solicitações.
             </p>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
-              Use o calendário para acompanhar a agenda e gerenciar reservas e bloqueios.
+              Use o calendário para acompanhar a agenda e gerenciar reservas, rejeições e bloqueios.
             </div>
           </>
         ) : (
           <>
             <p className="text-sm text-white/70">Fim de semana selecionado</p>
             <h3 className="mt-1 text-2xl font-semibold text-white">
-              {formatDateBR(selectedWeekend.weekendStartISO)} →{" "}
-              {formatDateBR(selectedWeekend.weekendEndISO)} (Sex—Dom)
+              {formatWeekendRange(
+                selectedWeekend.weekendStartISO,
+                selectedWeekend.weekendEndISO
+              )}
             </h3>
 
             <p className="mt-2 text-white/70">
-              Status:{" "}
+              Status consolidado:{" "}
               <b
                 className={
-                  weekendStatus === "AVAILABLE"
+                  selectedWeekend.status === "AVAILABLE"
                     ? "text-emerald-200"
-                    : weekendStatus === "PENDING"
+                    : selectedWeekend.status === "PENDING"
                     ? "text-amber-200"
-                    : weekendStatus === "RESERVED"
+                    : selectedWeekend.status === "RESERVED"
                     ? "text-rose-200"
                     : "text-white/70"
                 }
               >
-                {weekendStatus}
+                {selectedWeekend.status}
               </b>
             </p>
 
-            {booking ? (
+            {selectedWeekend.status === "BLOCKED" && selectedWeekend.blockReason ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-xs text-white/50">Observação do bloqueio</p>
+                <p className="mt-2 text-white/80 break-words">{selectedWeekend.blockReason}</p>
+              </div>
+            ) : null}
+
+            {activeBookings.length > 0 ? (
               <div className="mt-5 space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-white/50">Igreja</p>
-                      <p className="mt-1 text-white font-medium break-words">
-                        {booking.church_name}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-white/50">Responsável</p>
-                      <p className="mt-1 text-white break-words">
-                        {booking.contact_name}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-white/50">WhatsApp</p>
-                      <p className="mt-1 text-white break-words">{booking.phone}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-white/50">E-mail</p>
-                      <p className="mt-1 text-white break-words">{booking.email}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-white/50">Quantidade de pessoas</p>
-                      <p className="mt-1 text-white">{booking.people_count}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-white/50">Criado em</p>
-                      <p className="mt-1 text-white">
-                        {formatDateTimeBR(booking.created_at)}
-                      </p>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <p className="text-xs text-white/50">Observações</p>
-                      <p className="mt-1 text-white/80 break-words">
-                        {booking.notes?.trim() || "Nenhuma observação."}
-                      </p>
-                    </div>
-                  </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white">Solicitações ativas desta data</h4>
+                  <p className="mt-1 text-xs text-white/50">
+                    Aqui aparecem as solicitações pendentes e/ou confirmadas do fim de semana.
+                  </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {whatsappHref ? (
-                    <a
-                      href={whatsappHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition"
+                {activeBookings.map((booking) => {
+                  const bookingStatus = (booking.status || "").toUpperCase();
+                  const whatsappHref = booking.phone
+                    ? `https://wa.me/${booking.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                        `Olá, ${booking.contact_name}! Sobre sua solicitação para o Sítio Emanuel no período de ${formatDateBR(
+                          booking.weekend_start
+                        )} até ${formatDateBR(booking.weekend_end)}, gostaríamos de falar com você.`
+                      )}`
+                    : null;
+
+                  return (
+                    <div
+                      key={booking.id}
+                      className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-4"
                     >
-                      WhatsApp
-                    </a>
-                  ) : null}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">{booking.church_name}</p>
+                          <p className="mt-1 text-xs text-white/50">
+                            Criado em {formatDateTimeBR(booking.created_at)}
+                          </p>
+                        </div>
 
-                  {bookingStatus === "PENDING" && (
-                    <>
-                      <button
-                        disabled={savingId === booking.id}
-                        onClick={() => onUpdateStatus(booking.id, "CONFIRMED")}
-                        className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90 transition disabled:opacity-60"
-                      >
-                        {savingId === booking.id ? "..." : "Confirmar"}
-                      </button>
+                        <span className={bookingPillClass(booking.status)}>
+                          {bookingLabel(booking.status)}
+                        </span>
+                      </div>
 
-                      <button
-                        disabled={savingId === booking.id}
-                        onClick={() => onUpdateStatus(booking.id, "REJECTED")}
-                        className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
-                      >
-                        {savingId === booking.id ? "..." : "Rejeitar"}
-                      </button>
-                    </>
-                  )}
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs text-white/50">Responsável</p>
+                          <p className="mt-1 text-white break-words">{booking.contact_name}</p>
+                        </div>
 
-                  {(bookingStatus === "CONFIRMED" || bookingStatus === "REJECTED") && (
-                    <button
-                      disabled={savingId === booking.id}
-                      onClick={() => onUpdateStatus(booking.id, "PENDING")}
-                      className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
-                    >
-                      {savingId === booking.id ? "..." : "Reabrir"}
-                    </button>
-                  )}
-                </div>
+                        <div>
+                          <p className="text-xs text-white/50">WhatsApp</p>
+                          <p className="mt-1 text-white break-words">{booking.phone}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-white/50">E-mail</p>
+                          <p className="mt-1 text-white break-words">{booking.email}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-white/50">Quantidade de pessoas</p>
+                          <p className="mt-1 text-white">{booking.people_count}</p>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <p className="text-xs text-white/50">Observações</p>
+                          <p className="mt-1 text-white/80 break-words">
+                            {booking.notes?.trim() || "Nenhuma observação."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {whatsappHref ? (
+                          <a
+                            href={whatsappHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition"
+                          >
+                            WhatsApp
+                          </a>
+                        ) : null}
+
+                        {bookingStatus === "PENDING" && (
+                          <>
+                            <button
+                              disabled={savingId === booking.id}
+                              onClick={() => onUpdateStatus(booking.id, "CONFIRMED")}
+                              className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90 transition disabled:opacity-60"
+                            >
+                              {savingId === booking.id ? "..." : "Confirmar"}
+                            </button>
+
+                            <button
+                              disabled={savingId === booking.id}
+                              onClick={() => onUpdateStatus(booking.id, "REJECTED")}
+                              className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
+                            >
+                              {savingId === booking.id ? "..." : "Rejeitar"}
+                            </button>
+                          </>
+                        )}
+
+                        {(bookingStatus === "CONFIRMED" || bookingStatus === "REJECTED") && (
+                          <button
+                            disabled={savingId === booking.id}
+                            onClick={() => onUpdateStatus(booking.id, "PENDING")}
+                            className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
+                          >
+                            {savingId === booking.id ? "..." : "Reabrir"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {historicalBookings.length > 0 ? (
+  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+    <h4 className="text-sm font-medium text-white">Histórico desta data</h4>
+    <div className="mt-3 space-y-3">
+      {historicalBookings.map((booking) => (
+        <div
+          key={booking.id}
+          className="rounded-xl border border-white/10 bg-black/20 p-3"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-white">{booking.church_name}</p>
+              <p className="mt-1 text-xs text-white/50">
+                {booking.contact_name} • {booking.phone}
+              </p>
+            </div>
+            <span className={bookingPillClass(booking.status)}>
+              {bookingLabel(booking.status)}
+            </span>
+          </div>
+
+          {(booking.status || "").toUpperCase() === "REJECTED" ? (
+            <div className="mt-3">
+              <button
+                disabled={savingId === booking.id}
+                onClick={() => onUpdateStatus(booking.id, "PENDING")}
+                className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
+              >
+                {savingId === booking.id ? "..." : "Reabrir esta solicitação"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  </div>
+) : null}
               </div>
             ) : (
               <>
                 <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
-                  {weekendStatus === "AVAILABLE"
-                    ? "Este fim de semana está livre, sem solicitação vinculada."
-                    : weekendStatus === "BLOCKED"
+                  {selectedWeekend.status === "AVAILABLE"
+                    ? "Este fim de semana está livre, sem solicitação ativa."
+                    : selectedWeekend.status === "BLOCKED"
                     ? "Este fim de semana está bloqueado manualmente."
-                    : "Não há detalhes adicionais para este fim de semana."}
+                    : "Não há solicitação ativa para este fim de semana."}
                 </div>
 
-                {weekendStatus === "BLOCKED" && selectedWeekend?.blockReason ? (
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs text-white/50">Observação do bloqueio</p>
-                    <p className="mt-2 text-white/80 break-words">
-                      {selectedWeekend.blockReason}
-                    </p>
-                  </div>
-                ) : null}
+                {historicalBookings.length > 0 ? (
+  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+    <h4 className="text-sm font-medium text-white">Histórico desta data</h4>
+    <div className="mt-3 space-y-3">
+      {historicalBookings.map((booking) => (
+        <div
+          key={booking.id}
+          className="rounded-xl border border-white/10 bg-black/20 p-3"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-white">{booking.church_name}</p>
+              <p className="mt-1 text-xs text-white/50">
+                {booking.contact_name} • {booking.phone}
+              </p>
+            </div>
+            <span className={bookingPillClass(booking.status)}>
+              {bookingLabel(booking.status)}
+            </span>
+          </div>
 
-                {weekendStatus === "AVAILABLE" && selectedWeekend ? (
+          {(booking.status || "").toUpperCase() === "REJECTED" ? (
+            <div className="mt-3">
+              <button
+                disabled={savingId === booking.id}
+                onClick={() => onUpdateStatus(booking.id, "PENDING")}
+                className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition disabled:opacity-60"
+              >
+                {savingId === booking.id ? "..." : "Reabrir esta solicitação"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  </div>
+) : null}
+
+                {selectedWeekend.status === "AVAILABLE" && selectedWeekend ? (
                   <div className="mt-4 space-y-3">
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -575,9 +702,7 @@ export default function AdminCalendarPanel({
                         </div>
 
                         <div>
-                          <label className="text-sm text-white/80">
-                            Quantidade de pessoas
-                          </label>
+                          <label className="text-sm text-white/80">Quantidade de pessoas</label>
                           <input
                             type="number"
                             min={40}
@@ -658,13 +783,11 @@ export default function AdminCalendarPanel({
                   </div>
                 ) : null}
 
-                {weekendStatus === "BLOCKED" && selectedWeekend ? (
+                {selectedWeekend.status === "BLOCKED" && selectedWeekend ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        onUnblockWeekend(selectedWeekend.weekendStartISO)
-                      }
+                      onClick={() => onUnblockWeekend(selectedWeekend.weekendStartISO)}
                       className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10 transition"
                     >
                       Desbloquear data
