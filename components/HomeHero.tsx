@@ -57,24 +57,23 @@ export default function HomeHero() {
                     </div>
                   </div>
 
-                  <h1 className="text-4xl sm:text-6xl font-semibold text-white">
-                    Sítio Emanuel
-                  </h1>
+                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-6xl">
+  Sítio Emanuel
+</h1>
 
-                  <p className="mx-auto mt-5 max-w-2xl text-base sm:text-lg text-white/80">
-                    Espaço para retiros, encontros e eventos. Consulte a disponibilidade
-                    e solicite sua reserva online.
-                  </p>
+<p className="mt-4 max-w-3xl text-base leading-relaxed text-white/85 sm:text-xl">
+  Espaço para retiros, encontros e eventos. Veja as datas disponíveis e envie
+  sua solicitação de reserva em poucos passos.
+</p>
 
-                  <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
-                    <Link
-                      href="/disponibilidade"
-                      className="rounded-2xl bg-white px-7 py-3.5 text-sm font-semibold text-black hover:bg-white/90 transition"
-                    >
-                      Ver disponibilidade
-                    </Link>
-
-                  </div>
+<div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+  <Link
+    href="/disponibilidade"
+    className="inline-flex items-center justify-center rounded-2xl bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-white/90"
+  >
+    Escolher data para reservar
+  </Link>
+</div>
 
                   <div className="mt-7 flex justify-center gap-2">
                     {PHOTOS.map((_, i) => (

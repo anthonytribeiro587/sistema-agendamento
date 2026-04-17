@@ -179,10 +179,23 @@ export default async function DisponibilidadePage() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
-      <h1 className="text-4xl font-semibold text-white">Disponibilidade</h1>
-      <p className="mt-2 text-white/70">
-        Clique em um dia <b>verde</b> (Sex/Sáb/Dom) para abrir o formulário ao lado.
-      </p>
+      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+  Disponibilidade
+</h1>
+
+<p className="mt-2 text-white/80">
+  Escolha um fim de semana disponível <span className="font-semibold text-emerald-300">(em verde)</span> para
+  solicitar sua reserva.
+</p>
+
+<div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+  <p className="font-medium text-white">Como funciona</p>
+  <div className="mt-2 space-y-1">
+    <p>1. Escolha um fim de semana disponível.</p>
+    <p>2. Preencha seus dados no formulário.</p>
+    <p>3. Nossa equipe analisará e confirmará a reserva.</p>
+  </div>
+</div>
 
       <DisponibilidadeCalendarClient weekends={weekends} />
     </main>

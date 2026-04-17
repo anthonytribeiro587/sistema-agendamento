@@ -68,7 +68,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
       const fri = w.weekendStartISO;
       const sat = addDaysISO(fri, 1);
       const sun = addDaysISO(fri, 2);
-
+      
       map.set(fri, w.status);
       map.set(sat, w.status);
       map.set(sun, w.status);
@@ -245,22 +245,30 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
     const st = dayStatus.get(c.iso);
     const isWeekendDay = Boolean(dayToWeekendStart.get(c.iso));
     const clickable =
+  
       isWeekendDay && st === "AVAILABLE";
 
     const isOtherMonth = !c.inMonth;
+    const isSelected = selectedWeekendStartISO === dayToWeekendStart.get(c.iso);
 
     const base =
-      "h-12 rounded-2xl border text-center text-sm flex items-center justify-center select-none transition";
-
+  "relative h-12 rounded-2xl border text-center text-sm flex items-center justify-center select-none transition";
+    
     const monthStyle = isOtherMonth
       ? "opacity-70 text-white/70"
       : "";
 
     const cls = st
-      ? `${base} ${statusClasses(st)} ${monthStyle} ${
-          clickable ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-80"
-        }`
-      : `${base} bg-black/20 border-white/5 text-white/50 ${monthStyle}`;
+  ? `${base} ${statusClasses(st)} ${monthStyle} ${
+      clickable
+        ? "cursor-pointer hover:brightness-110"
+        : "cursor-not-allowed opacity-80"
+    } ${
+      isSelected
+        ? "ring-2 ring-white scale-105"
+        : ""
+    }`
+  : `${base} bg-black/20 border-white/5 text-white/50 ${monthStyle}`;
 
     return (
       <div
@@ -270,14 +278,18 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
         title={st ? `${formatDateBR(c.iso)} — ${st}` : formatDateBR(c.iso)}
       >
         {c.day}
+
+{isSelected && (
+  <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-white" />
+)}
       </div>
     );
   })}
 </div>
 
         <p className="mt-3 text-xs text-white/60">
-          * Clique em <b>Sex/Sáb/Dom</b> (verde) para solicitar.
-        </p>
+  * Escolha um fim de semana <b>disponível</b> (em verde) para iniciar sua solicitação.
+</p>
       </div>
 
       {/* DIREITA: formulário */}
@@ -288,51 +300,75 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
     <h3 className="mt-1 text-2xl font-semibold text-white">
       Nenhum fim de semana selecionado
     </h3>
-    <p className="mt-2 text-white/60">
-      Selecione um fim de semana no calendário.
+    <p className="mt-2 text-white/75">
+      Selecione um fim de semana disponível no calendário para iniciar sua solicitação.
     </p>
 
-    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
-      Selecione um fim de semana <b>disponível</b> para liberar o formulário.
-    </div>
+    <div className="mb-4 rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4">
+  <p className="text-sm font-medium text-emerald-100">
+    Solicitação de reserva
+  </p>
+  <p className="mt-2 text-sm text-emerald-50/90">
+    Preencha o formulário abaixo para enviar sua solicitação. Depois disso,
+    você será direcionado para o WhatsApp e nossa equipe confirmará a reserva.
+  </p>
+</div>
   </>
 ) : (
   <>
-    <p className="text-sm text-white/70">Fim de semana selecionado</p>
-    <h3 className="mt-1 text-2xl font-semibold text-white">
-      {selectedTitle}
-    </h3>
+  <p className="text-sm text-white/70">Fim de semana selecionado</p>
+  <h3 className="mt-1 text-2xl font-semibold text-white">
+    {selectedTitle}
+  </h3>
 
-    <p className="mt-2 text-white/70">
-      Status:{" "}
-      <b
-        className={
-          selectedWeekend.status === "AVAILABLE"
-            ? "text-emerald-200"
-            : selectedWeekend.status === "PENDING"
+  <p className="mt-2 text-white/70">
+    Status:{" "}
+    <b
+      className={
+        selectedWeekend.status === "AVAILABLE"
+          ? "text-emerald-200"
+          : selectedWeekend.status === "PENDING"
             ? "text-amber-200"
             : selectedWeekend.status === "RESERVED"
-            ? "text-rose-200"
-            : "text-white/70"
-        }
-      >
-        {selectedWeekend.status}
-      </b>
-    </p>
+              ? "text-rose-200"
+              : "text-white/70"
+      }
+    >
+      {selectedWeekend.status === "AVAILABLE"
+        ? "Disponível"
+        : selectedWeekend.status === "PENDING"
+          ? "Pendente"
+          : selectedWeekend.status === "RESERVED"
+            ? "Reservado"
+            : "Bloqueado"}
+    </b>
+  </p>
 
-    <div className="mt-5">
-      {selectedWeekend.status === "AVAILABLE" ? (
+  <div className="mt-5">
+    {selectedWeekend.status === "AVAILABLE" ? (
+      <>
+        <div className="mb-4 rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4">
+          <p className="text-sm font-medium text-emerald-100">
+            Solicitação de reserva
+          </p>
+          <p className="mt-2 text-sm text-emerald-50/90">
+            Preencha os dados abaixo para solicitar este fim de semana. Após o envio,
+            nossa equipe fará a análise e confirmará a disponibilidade.
+          </p>
+        </div>
+
         <BookingForm
           weekendStartISO={selectedWeekend.weekendStartISO}
           weekendEndISO={selectedWeekend.weekendEndISO}
         />
-      ) : (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
-          Este fim de semana não está disponível para solicitação.
-        </div>
-      )}
-    </div>
-  </>
+      </>
+    ) : (
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/70">
+        Este fim de semana não está disponível para solicitação no momento.
+      </div>
+    )}
+  </div>
+</>
 )}
       </div>
     </div>
