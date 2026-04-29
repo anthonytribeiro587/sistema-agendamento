@@ -67,8 +67,13 @@ agenda/
 components/
 lib/
 
+## 📸 Demonstração
 
----
+### Página inicial
+![Tela inicial](public/SiteEmanuelInicio.png)
+
+### Painel administrativo
+![Painel admin](public/SiteEmanuelAdmin.png)
 
 ## 💻 Como rodar o projeto localmente
 
