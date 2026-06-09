@@ -108,4 +108,4 @@ Deploy com domínio próprio
 Anthony Thiago da Cruz Ribeiro
 
 - 📧 anthony.tribeiro587@gmail.com
-- 💼 LinkedIn (adicione aqui)https://www.linkedin.com/in/anthonytcribeiro
+- 💼 LinkedIn https://www.linkedin.com/in/anthonytcribeiro
