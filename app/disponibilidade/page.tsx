@@ -8,12 +8,11 @@ export const revalidate = 60;
 
 type AvailabilityRow = {
   weekend_start: string | null;
-  status: "PENDING" | "RESERVED" | "BLOCKED" | null;
+  status: "UNAVAILABLE" | "PENDING" | "RESERVED" | "BLOCKED" | null;
 };
 
 type BookingRow = {
   weekend_start: string | null;
-  status: "PENDING" | "CONFIRMED" | string | null;
 };
 
 type BlockRow = {
@@ -56,9 +55,13 @@ function generateWeekendsBetween(startISO: string, endISO: string): WeekendItem[
 }
 
 function normalizeStatus(status: AvailabilityRow["status"]): WeekendStatus | null {
-  if (status === "PENDING") return "PENDING";
-  if (status === "RESERVED") return "RESERVED";
-  if (status === "BLOCKED") return "BLOCKED";
+  // Solicitações pendentes continuam aceitando novos pedidos, mas não são
+  // reveladas ao navegador. Reservas confirmadas e bloqueios viram apenas
+  // "indisponível", sem indicar o motivo.
+  if (status === "PENDING") return null;
+  if (status === "UNAVAILABLE" || status === "RESERVED" || status === "BLOCKED") {
+    return "UNAVAILABLE";
+  }
   return null;
 }
 
@@ -71,43 +74,56 @@ async function loadAvailability(fromISO: string, toISO: string) {
   });
 
   if (!rpcResult.error) {
-    return { data: (rpcResult.data as AvailabilityRow[] | null) ?? [], error: null };
+    return {
+      data: (rpcResult.data as AvailabilityRow[] | null) ?? [],
+      error: null,
+    };
   }
 
-  console.warn("Availability RPC unavailable, using protected table fallback:", rpcResult.error.message);
+  console.warn(
+    "Availability RPC unavailable, using protected table fallback:",
+    rpcResult.error.message
+  );
 
   const [blocksResult, bookingsResult] = await Promise.all([
-    supabase.from("blocks").select("weekend_start").gte("weekend_start", fromISO).lte("weekend_start", toISO),
+    supabase
+      .from("blocks")
+      .select("weekend_start")
+      .gte("weekend_start", fromISO)
+      .lte("weekend_start", toISO),
     supabase
       .from("bookings")
-      .select("weekend_start, status")
+      .select("weekend_start")
       .gte("weekend_start", fromISO)
       .lte("weekend_start", toISO)
-      .in("status", ["PENDING", "CONFIRMED"]),
+      .eq("status", "CONFIRMED"),
   ]);
 
   if (blocksResult.error || bookingsResult.error) {
     return {
       data: [] as AvailabilityRow[],
-      error: blocksResult.error?.message || bookingsResult.error?.message || "Erro ao consultar agenda.",
+      error:
+        blocksResult.error?.message ||
+        bookingsResult.error?.message ||
+        "Erro ao consultar agenda.",
     };
   }
 
-  const statusByDate = new Map<string, AvailabilityRow["status"]>();
+  const unavailableDates = new Set<string>();
 
   for (const row of (bookingsResult.data as BookingRow[] | null) ?? []) {
-    if (!row.weekend_start) continue;
-    const current = statusByDate.get(row.weekend_start);
-    if (row.status === "CONFIRMED") statusByDate.set(row.weekend_start, "RESERVED");
-    else if (row.status === "PENDING" && current !== "RESERVED") statusByDate.set(row.weekend_start, "PENDING");
+    if (row.weekend_start) unavailableDates.add(row.weekend_start);
   }
 
   for (const row of (blocksResult.data as BlockRow[] | null) ?? []) {
-    if (row.weekend_start) statusByDate.set(row.weekend_start, "BLOCKED");
+    if (row.weekend_start) unavailableDates.add(row.weekend_start);
   }
 
   return {
-    data: Array.from(statusByDate, ([weekend_start, status]) => ({ weekend_start, status })),
+    data: Array.from(unavailableDates, (weekend_start) => ({
+      weekend_start,
+      status: "UNAVAILABLE" as const,
+    })),
     error: null,
   };
 }
@@ -115,7 +131,7 @@ async function loadAvailability(fromISO: string, toISO: string) {
 export default async function DisponibilidadePage() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 18, 0);
+  const to = new Date(now.getFullYear(), now.getMonth() + 12, 0);
   const fromISO = toISODate(from);
   const toISO = toISODate(to);
   const baseWeekends = generateWeekendsBetween(fromISO, toISO);
@@ -131,11 +147,19 @@ export default async function DisponibilidadePage() {
   if (result.error) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Agenda</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Disponibilidade</h1>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+          Agenda
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+          Disponibilidade
+        </h1>
         <div className="mt-7 rounded-3xl border border-rose-400/20 bg-rose-400/10 p-6">
-          <p className="font-medium text-rose-100">Não foi possível carregar a agenda agora.</p>
-          <p className="mt-2 text-sm leading-6 text-rose-50/70">Atualize a página em alguns instantes ou fale com a equipe pelo WhatsApp.</p>
+          <p className="font-medium text-rose-100">
+            Não foi possível carregar a agenda agora.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-rose-50/70">
+            Atualize a página em alguns instantes ou fale com a equipe pelo WhatsApp.
+          </p>
         </div>
       </main>
     );
@@ -156,17 +180,31 @@ export default async function DisponibilidadePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
       <div className="max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Agenda de reservas</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Encontre o fim de semana ideal.</h1>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+          Agenda de reservas
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+          Encontre o fim de semana ideal.
+        </h1>
         <p className="mt-4 text-base leading-7 text-white/62">
-          Datas verdes estão livres. Datas amarelas já possuem uma solicitação em análise, mas ainda aceitam novos pedidos.
+          O calendário público mostra somente se o período está disponível ou
+          indisponível, preservando os detalhes internos da agenda.
         </p>
       </div>
 
       <div className="mt-7 grid gap-3 rounded-3xl border border-white/9 bg-white/[0.035] p-5 text-sm text-white/62 sm:grid-cols-3">
-        <p><strong className="block text-white">1. Escolha</strong> Selecione um período verde ou amarelo.</p>
-        <p><strong className="block text-white">2. Solicite</strong> Informe os dados do seu grupo.</p>
-        <p><strong className="block text-white">3. Confirme</strong> Aguarde o retorno da equipe.</p>
+        <p>
+          <strong className="block text-white">1. Escolha</strong>
+          Selecione um período disponível.
+        </p>
+        <p>
+          <strong className="block text-white">2. Solicite</strong>
+          Informe os dados do seu grupo.
+        </p>
+        <p>
+          <strong className="block text-white">3. Confirme</strong>
+          Aguarde o retorno da equipe.
+        </p>
       </div>
 
       <DisponibilidadeCalendarClient weekends={weekends} />

@@ -28,20 +28,14 @@ type BlockRow = {
   reason?: string | null;
 };
 
-function isAdminEmail(email: string | null | undefined) {
-  const allowed = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (!email) return false;
-  if (allowed.length === 0) return false;
-
-  return allowed.includes(email.toLowerCase());
-}
-
 function btnBase() {
   return "inline-flex items-center justify-center rounded-2xl border px-4 py-2 text-sm font-medium transition whitespace-nowrap";
+}
+
+function toISODate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function consolidatedWeekendStatus(
@@ -50,7 +44,9 @@ function consolidatedWeekendStatus(
 ): "AVAILABLE" | "PENDING" | "RESERVED" | "BLOCKED" {
   if (hasBlock) return "BLOCKED";
 
-  const normalized = bookings.map((b) => (b.status || "").toUpperCase());
+  const normalized = bookings.map((booking) =>
+    String(booking.status || "").toUpperCase()
+  );
 
   if (normalized.includes("CONFIRMED")) return "RESERVED";
   if (normalized.includes("PENDING")) return "PENDING";
@@ -67,7 +63,7 @@ function AdminAgendaContent() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -78,26 +74,25 @@ function AdminAgendaContent() {
       method: "POST",
     }).catch(() => null);
 
-    const [{ data: bookingRows, error: bookingError }, { data: blockRows, error: blockError }] =
-      await Promise.all([
-        supabase
-          .from("bookings")
-          .select(
-            "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
-          )
-          .order("created_at", { ascending: false }),
-        supabase.from("blocks").select("weekend_start, weekend_end, reason"),
-      ]);
+    const [
+      { data: bookingRows, error: bookingError },
+      { data: blockRows, error: blockError },
+    ] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select(
+          "id, weekend_start, weekend_end, church_name, contact_name, phone, email, people_count, status, created_at, notes"
+        )
+        .order("created_at", { ascending: false }),
+      supabase.from("blocks").select("weekend_start, weekend_end, reason"),
+    ]);
 
-    if (bookingError) {
-      setError(bookingError.message);
-      setBookings([]);
-      setBlocks([]);
-      return;
-    }
-
-    if (blockError) {
-      setError(blockError.message);
+    if (bookingError || blockError) {
+      setError(
+        bookingError?.message ||
+          blockError?.message ||
+          "Não foi possível carregar a agenda."
+      );
       setBookings([]);
       setBlocks([]);
       return;
@@ -111,18 +106,27 @@ function AdminAgendaContent() {
     async function init() {
       setError("");
 
-      const { data } = await supabase.auth.getUser();
+      const { data, error: userError } = await supabase.auth.getUser();
       const user = data.user;
 
-      if (!user) {
-        router.push("/login");
+      if (userError || !user) {
+        router.replace("/login");
         return;
       }
 
-      const email = user.email ?? null;
-      setUserEmail(email);
+      setUserEmail(user.email ?? null);
 
-      if (!isAdminEmail(email)) {
+      // A autorização não depende mais de uma lista de e-mails exposta no
+      // JavaScript. O próprio banco, protegido por RLS, informa se o usuário
+      // autenticado está ativo em admin_users.
+      const { data: adminUser, error: adminError } = await supabase
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (adminError || !adminUser) {
         setError("Seu usuário não tem permissão para acessar a área administrativa.");
         setLoading(false);
         return;
@@ -132,21 +136,21 @@ function AdminAgendaContent() {
       setLoading(false);
     }
 
-    init();
-  }, [router, supabase, loadData]);
+    void init();
+  }, [loadData, router, supabase]);
 
   async function blockWeekend(weekendStartISO: string, reason: string) {
     setError("");
 
-    const res = await fetch("/api/blocks", {
+    const response = await fetch("/api/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weekendStartISO, reason }),
     });
 
-    if (!res.ok) {
-      const j = await res.json().catch(() => null);
-      setError(j?.message || j?.error || "Falha ao bloquear data.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(data?.message || data?.error || "Falha ao bloquear data.");
       return;
     }
 
@@ -156,15 +160,15 @@ function AdminAgendaContent() {
   async function unblockWeekend(weekendStartISO: string) {
     setError("");
 
-    const res = await fetch("/api/blocks", {
+    const response = await fetch("/api/blocks", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weekendStartISO }),
     });
 
-    if (!res.ok) {
-      const j = await res.json().catch(() => null);
-      setError(j?.message || j?.error || "Falha ao desbloquear data.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(data?.message || data?.error || "Falha ao desbloquear data.");
       return;
     }
 
@@ -182,15 +186,15 @@ function AdminAgendaContent() {
   }) {
     setError("");
 
-    const res = await fetch("/api/bookings/manual", {
+    const response = await fetch("/api/bookings/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      const j = await res.json().catch(() => null);
-      setError(j?.message || j?.error || "Falha ao criar reserva manual.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(data?.message || data?.error || "Falha ao criar reserva manual.");
       return;
     }
 
@@ -209,7 +213,7 @@ function AdminAgendaContent() {
     setError("");
     setSavingId(id);
 
-    const res = await fetch(`/api/bookings/${id}`, {
+    const response = await fetch(`/api/bookings/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -217,9 +221,9 @@ function AdminAgendaContent() {
 
     setSavingId(null);
 
-    if (!res.ok) {
-      const j = await res.json().catch(() => null);
-      setError(j?.message || j?.error || "Falha ao atualizar status.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      setError(data?.message || data?.error || "Falha ao atualizar status.");
       return;
     }
 
@@ -238,7 +242,10 @@ function AdminAgendaContent() {
     const to = new Date(now.getFullYear(), now.getMonth() + 18, 0);
 
     const blockMap = new Map(
-      blocks.map((b) => [String(b.weekend_start).slice(0, 10), b] as const)
+      blocks.map((block) => [
+        String(block.weekend_start).slice(0, 10),
+        block,
+      ] as const)
     );
 
     const bookingsByWeekend = new Map<string, AdminBooking[]>();
@@ -251,15 +258,15 @@ function AdminAgendaContent() {
     }
 
     const items: AdminWeekendItem[] = [];
-    const cur = new Date(from);
+    const cursor = new Date(from);
 
-    while (cur.getDay() !== 5) {
-      cur.setDate(cur.getDate() + 1);
+    while (cursor.getDay() !== 5) {
+      cursor.setDate(cursor.getDate() + 1);
     }
 
-    while (cur <= to) {
-      const start = cur.toISOString().slice(0, 10);
-      const end = new Date(cur);
+    while (cursor <= to) {
+      const start = toISODate(cursor);
+      const end = new Date(cursor);
       end.setDate(end.getDate() + 2);
 
       const weekendBookings = (bookingsByWeekend.get(start) || []).sort((a, b) => {
@@ -272,13 +279,16 @@ function AdminAgendaContent() {
 
       items.push({
         weekendStartISO: start,
-        weekendEndISO: end.toISOString().slice(0, 10),
-        status: consolidatedWeekendStatus(weekendBookings, Boolean(block)),
+        weekendEndISO: toISODate(end),
+        status: consolidatedWeekendStatus(
+          weekendBookings as Booking[],
+          Boolean(block)
+        ),
         bookings: weekendBookings,
         blockReason: block?.reason ?? null,
       });
 
-      cur.setDate(cur.getDate() + 7);
+      cursor.setDate(cursor.getDate() + 7);
     }
 
     return items;
@@ -314,6 +324,7 @@ function AdminAgendaContent() {
           </button>
 
           <button
+            type="button"
             onClick={onRefresh}
             disabled={refreshing}
             className={`${btnBase()} border-white/15 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-60`}
@@ -322,6 +333,7 @@ function AdminAgendaContent() {
           </button>
 
           <button
+            type="button"
             onClick={handleLogout}
             className={`${btnBase()} border-white/15 bg-black/30 text-white/80 hover:bg-white/10`}
           >
@@ -330,16 +342,18 @@ function AdminAgendaContent() {
         </div>
       </div>
 
-      {error && (
+      {error ? (
         <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           Erro: {error}
         </p>
-      )}
+      ) : null}
 
       <div className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Agenda por fim de semana</h2>
-          <span className="text-sm text-white/60">{bookings.length} solicitação(ões)</span>
+          <span className="text-sm text-white/60">
+            {bookings.length} solicitação(ões)
+          </span>
         </div>
 
         <AdminCalendarPanel
@@ -353,8 +367,8 @@ function AdminAgendaContent() {
         />
 
         <p className="mt-6 text-xs text-white/50">
-          Uma data pode ter várias solicitações no histórico. A agenda exibe o status consolidado
-          e todas as solicitações daquele fim de semana.
+          Uma data pode ter várias solicitações no histórico. A agenda exibe o
+          status consolidado e todas as solicitações daquele fim de semana.
         </p>
       </div>
     </main>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import BookingForm from "@/components/BookingForm";
 
-export type WeekendStatus = "AVAILABLE" | "PENDING" | "RESERVED" | "BLOCKED";
+export type WeekendStatus = "AVAILABLE" | "UNAVAILABLE";
 
 export type WeekendItem = {
   weekendStartISO: string;
@@ -17,9 +17,7 @@ type Props = {
 
 const STATUS_LABEL: Record<WeekendStatus, string> = {
   AVAILABLE: "Disponível",
-  PENDING: "Em análise",
-  RESERVED: "Reservado",
-  BLOCKED: "Bloqueado",
+  UNAVAILABLE: "Indisponível",
 };
 
 function toISODate(date: Date) {
@@ -56,30 +54,18 @@ function statusClasses(status: WeekendStatus) {
   if (status === "AVAILABLE") {
     return "border-emerald-400/35 bg-emerald-500/25 text-emerald-50";
   }
-  if (status === "PENDING") {
-    return "border-amber-400/35 bg-amber-500/25 text-amber-50";
-  }
-  if (status === "RESERVED") {
-    return "border-rose-400/35 bg-rose-500/25 text-rose-50";
-  }
-  return "border-white/10 bg-white/5 text-white/55";
+  return "border-white/10 bg-white/5 text-white/48";
 }
 
 function badgeClasses(status: WeekendStatus) {
   if (status === "AVAILABLE") {
     return "border-emerald-400/25 bg-emerald-500/15 text-emerald-200";
   }
-  if (status === "PENDING") {
-    return "border-amber-400/25 bg-amber-500/15 text-amber-200";
-  }
-  if (status === "RESERVED") {
-    return "border-rose-400/25 bg-rose-500/15 text-rose-200";
-  }
-  return "border-white/10 bg-white/5 text-white/70";
+  return "border-white/10 bg-white/5 text-white/65";
 }
 
-function canRequest(status: WeekendStatus) {
-  return status === "AVAILABLE" || status === "PENDING";
+function monthKey(year: number, month: number) {
+  return year * 12 + month;
 }
 
 export default function DisponibilidadeCalendarClient({ weekends }: Props) {
@@ -118,6 +104,20 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
     ? weekendByStart.get(selectedWeekendStart) ?? null
     : null;
 
+  const firstMonthKey = useMemo(() => {
+    const first = weekends[0]?.weekendStartISO;
+    if (!first) return monthKey(today.getFullYear(), today.getMonth());
+    const [year, month] = first.split("-").map(Number);
+    return monthKey(year, month - 1);
+  }, [today, weekends]);
+
+  const lastMonthKey = useMemo(() => {
+    const last = weekends.at(-1)?.weekendStartISO;
+    if (!last) return monthKey(today.getFullYear(), today.getMonth());
+    const [year, month] = last.split("-").map(Number);
+    return monthKey(year, month - 1);
+  }, [today, weekends]);
+
   const cells = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1);
     const start = new Date(viewYear, viewMonth, 1 - mondayIndex(firstDay.getDay()));
@@ -140,11 +140,15 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
     return weeks.flat();
   }, [viewMonth, viewYear]);
 
-  const isCurrentMonth =
-    viewYear === today.getFullYear() && viewMonth === today.getMonth();
+  const currentMonthKey = monthKey(viewYear, viewMonth);
+  const cannotGoBack = currentMonthKey <= firstMonthKey;
+  const cannotGoForward = currentMonthKey >= lastMonthKey;
 
   function changeMonth(direction: -1 | 1) {
     const date = new Date(viewYear, viewMonth + direction, 1);
+    const nextKey = monthKey(date.getFullYear(), date.getMonth());
+    if (nextKey < firstMonthKey || nextKey > lastMonthKey) return;
+
     setViewYear(date.getFullYear());
     setViewMonth(date.getMonth());
     setSelectedWeekendStart("");
@@ -153,8 +157,10 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
   function selectDay(iso: string) {
     const weekendStart = dayToWeekendStart.get(iso);
     if (!weekendStart) return;
+
     const weekend = weekendByStart.get(weekendStart);
-    if (!weekend || !canRequest(weekend.status)) return;
+    if (!weekend || weekend.status !== "AVAILABLE") return;
+
     setSelectedWeekendStart(weekendStart);
   }
 
@@ -180,7 +186,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
             <button
               type="button"
               onClick={() => changeMonth(-1)}
-              disabled={isCurrentMonth}
+              disabled={cannotGoBack}
               className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Mês anterior"
             >
@@ -189,7 +195,8 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
             <button
               type="button"
               onClick={() => changeMonth(1)}
-              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white/80 transition hover:bg-white/10"
+              disabled={cannotGoForward}
+              className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Próximo mês"
             >
               →
@@ -198,7 +205,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
         </div>
 
         <div className="mt-4 grid grid-cols-7 gap-1.5 text-center text-xs text-white/55 sm:gap-2">
-          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((label) => (
+          {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((label) => (
             <div key={label}>{label}</div>
           ))}
         </div>
@@ -207,7 +214,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
           {cells.map((cell) => {
             const weekendStart = dayToWeekendStart.get(cell.iso);
             const status = dayStatus.get(cell.iso);
-            const requestable = status ? canRequest(status) : false;
+            const requestable = status === "AVAILABLE";
             const selected = Boolean(
               weekendStart && weekendStart === selectedWeekendStart
             );
@@ -242,8 +249,8 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
         </div>
 
         <p className="mt-4 text-xs leading-relaxed text-white/60">
-          Verde: livre. Amarelo: já existe pedido em análise, mas você também pode
-          solicitar. Vermelho e cinza não aceitam novas solicitações.
+          Verde: disponível para solicitação. Cinza: indisponível no momento.
+          O motivo da indisponibilidade não é exibido publicamente.
         </p>
       </section>
 
@@ -252,37 +259,27 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
           <div className="min-h-48">
             <p className="text-sm text-white/60">Fim de semana selecionado</p>
             <h3 className="mt-1 text-xl font-semibold text-white sm:text-2xl">
-              Selecione uma data no calendário
+              Selecione uma data disponível
             </h3>
             <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/70">
-              Toque em um período verde ou amarelo para abrir o formulário de
-              solicitação.
+              Toque em um período verde para abrir o formulário de solicitação.
             </p>
           </div>
         ) : (
           <>
             <p className="text-sm text-white/60">Fim de semana selecionado</p>
             <h3 className="mt-1 text-xl font-semibold text-white sm:text-2xl">
-              {formatDateBR(selectedWeekend.weekendStartISO)} até{' '}
+              {formatDateBR(selectedWeekend.weekendStartISO)} até{" "}
               {formatDateBR(selectedWeekend.weekendEndISO)}
             </h3>
 
-            <div
-              className={`mt-4 rounded-2xl border p-4 ${
-                selectedWeekend.status === "PENDING"
-                  ? "border-amber-500/20 bg-amber-500/10"
-                  : "border-emerald-500/20 bg-emerald-500/10"
-              }`}
-            >
+            <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <p className="text-sm font-medium text-white">
-                {selectedWeekend.status === "PENDING"
-                  ? "Já existe uma solicitação em análise"
-                  : "Data disponível para solicitação"}
+                Data disponível para solicitação
               </p>
               <p className="mt-2 text-sm leading-relaxed text-white/75">
-                {selectedWeekend.status === "PENDING"
-                  ? "A data ainda não foi confirmada. Você pode enviar seu pedido normalmente; a equipe analisará todas as solicitações."
-                  : "O envio registra seu interesse. A reserva só fica garantida depois da confirmação da equipe."}
+                O envio registra seu interesse. A reserva só fica garantida depois
+                da confirmação da equipe.
               </p>
             </div>
 

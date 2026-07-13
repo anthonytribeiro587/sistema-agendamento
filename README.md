@@ -6,15 +6,16 @@ Aplicação em Next.js para apresentação do espaço, consulta de disponibilida
 
 ### Área pública
 
-- Exibe os próximos fins de semana em calendário.
-- Permite solicitações em datas livres ou com outros pedidos ainda em análise.
-- Impede solicitações em datas bloqueadas ou já confirmadas.
+- Exibe os próximos 12 meses de fins de semana em calendário.
+- Mostra apenas `AVAILABLE` ou `UNAVAILABLE`, sem revelar publicamente se existe solicitação pendente, reserva confirmada ou bloqueio interno.
+- Permite novas solicitações quando a data ainda não possui reserva confirmada nem bloqueio.
 - Registra o pedido como `PENDING` e gera o atalho opcional para WhatsApp.
 - Aplica validação no servidor, campo-isca contra bots e limite por origem.
 
 ### Área administrativa
 
 - Login com Supabase Auth.
+- Autorização pela tabela protegida `admin_users`, sem lista pública de e-mails administrativos.
 - Listagem e gestão de solicitações.
 - Confirmação, rejeição, cancelamento e reabertura.
 - Reserva manual e bloqueio de datas.
@@ -29,6 +30,14 @@ Aplicação em Next.js para apresentação do espaço, consulta de disponibilida
 - Pedidos pendentes expiram após 48 horas e são movidos para rejeitados com motivo de expiração.
 - Bloquear uma data rejeita pedidos pendentes, mas nunca sobrescreve uma reserva confirmada.
 
+## Privacidade da agenda
+
+- Nome, telefone, e-mail, igreja, quantidade e observações nunca são enviados ao calendário público.
+- O navegador recebe somente datas e o estado simplificado `AVAILABLE` ou `UNAVAILABLE`.
+- Solicitações pendentes não são reveladas: continuam aparecendo como disponíveis até uma reserva ser confirmada.
+- A função de disponibilidade é executada somente pelo backend com `service_role`.
+- As tabelas permanecem protegidas por RLS e leitura administrativa.
+
 ## Stack
 
 - Next.js 16 / React 19 / TypeScript
@@ -42,17 +51,18 @@ Aplicação em Next.js para apresentação do espaço, consulta de disponibilida
 
 Crie um projeto vazio no Supabase e aguarde a inicialização do banco.
 
-### 2. Executar a migration
+### 2. Executar as migrations
 
-No SQL Editor do Supabase, execute integralmente:
+No SQL Editor do Supabase, execute integralmente e nesta ordem:
 
 ```text
 supabase/migrations/202607130001_rebuild_booking_system.sql
+supabase/migrations/202607130002_privacy_hardening.sql
 ```
 
-A migration cria tabelas, índices, RLS, funções transacionais e a consulta pública segura da agenda.
+A primeira migration cria tabelas, índices, RLS e funções transacionais. A segunda reduz a exposição da agenda pública e restringe a RPC de disponibilidade ao backend.
 
-> A migration foi preparada para um Supabase novo. Não execute sobre uma base antiga com dados reais sem backup e revisão das diferenças de esquema.
+> Em um banco que já recebeu a primeira migration, execute somente `202607130002_privacy_hardening.sql`.
 
 ### 3. Criar o usuário administrador
 
@@ -76,7 +86,6 @@ Copie `.env.example` para `.env.local` no ambiente local e configure as mesmas v
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-NEXT_PUBLIC_ADMIN_EMAILS=admin@exemplo.com
 NEXT_PUBLIC_WHATSAPP_NUMBER=5551995092781
 RATE_LIMIT_SALT=uma-chave-aleatoria-grande
 ```
@@ -96,7 +105,7 @@ npm run dev
 
 1. Trabalhar em uma branch.
 2. Executar lint e build antes do push.
-3. Fazer um único merge na `main` quando o novo Supabase e as variáveis estiverem prontos.
+3. Fazer um único merge na `main` quando o Supabase e as variáveis estiverem prontos.
 4. Validar login, calendário, solicitação pública, confirmação, bloqueio e reserva manual no deploy final.
 
 ## Deploy atual
