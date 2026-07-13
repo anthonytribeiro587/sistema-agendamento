@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import PhotoGalleryOverlay from "@/components/PhotoGalleryOverlay";
 import WhatsAppButton from "@/components/WhatsAppButton";
 
 const inter = Inter({
@@ -65,6 +66,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#080d0a] text-white antialiased">
         <Navbar />
         {children}
+        <PhotoGalleryOverlay />
         <WhatsAppButton />
       </body>
     </html>
