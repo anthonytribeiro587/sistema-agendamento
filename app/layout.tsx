@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import GoogleReviewsPortal from "@/components/GoogleReviewsPortal";
 import Navbar from "@/components/Navbar";
 import PhotoGalleryOverlay from "@/components/PhotoGalleryOverlay";
 import WhatsAppButton from "@/components/WhatsAppButton";
@@ -66,6 +67,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#080d0a] text-white antialiased">
         <Navbar />
         {children}
+        <GoogleReviewsPortal />
         <PhotoGalleryOverlay />
         <WhatsAppButton />
       </body>
