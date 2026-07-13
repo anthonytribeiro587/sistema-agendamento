@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import WhatsAppButton from "@/components/WhatsAppButton";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://sistema-agendamento-beta.vercel.app"),
@@ -12,7 +19,13 @@ export const metadata: Metadata = {
   description:
     "Espaço em Gravataí/RS para retiros, encontros de igrejas e eventos em grupo. Consulte as datas e envie sua solicitação de reserva.",
   applicationName: "Sítio Emanuel",
-  keywords: ["Sítio Emanuel", "retiro", "retiro de igreja", "Gravataí", "espaço para eventos"],
+  keywords: [
+    "Sítio Emanuel",
+    "retiro",
+    "retiro de igreja",
+    "Gravataí",
+    "espaço para eventos",
+  ],
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any" }],
     shortcut: ["/favicon.ico"],
@@ -22,9 +35,17 @@ export const metadata: Metadata = {
     type: "website",
     locale: "pt_BR",
     title: "Sítio Emanuel — Retiros e Encontros",
-    description: "Estrutura, natureza e tranquilidade para retiros e encontros em Gravataí/RS.",
+    description:
+      "Estrutura, natureza e tranquilidade para retiros e encontros em Gravataí/RS.",
     siteName: "Sítio Emanuel",
-    images: [{ url: "/fotos/1.jpeg", width: 1200, height: 630, alt: "Sítio Emanuel" }],
+    images: [
+      {
+        url: "/fotos/2.jpeg",
+        width: 1200,
+        height: 630,
+        alt: "Vista do Sítio Emanuel",
+      },
+    ],
   },
   robots: { index: true, follow: true },
 };
@@ -32,14 +53,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#070908",
+  themeColor: "#080d0a",
   colorScheme: "dark",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR">
-      <body className="min-h-screen bg-[#070908] text-white antialiased">
+    <html lang="pt-BR" className={inter.variable}>
+      <body className="min-h-screen bg-[#080d0a] text-white antialiased">
         <Navbar />
         {children}
         <WhatsAppButton />
