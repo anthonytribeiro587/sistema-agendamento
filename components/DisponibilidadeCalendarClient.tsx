@@ -198,7 +198,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
         </div>
 
         <div className="mt-4 grid grid-cols-7 gap-1.5 text-center text-xs text-white/55 sm:gap-2">
-          {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((label) => (
+          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((label) => (
             <div key={label}>{label}</div>
           ))}
         </div>
@@ -263,7 +263,7 @@ export default function DisponibilidadeCalendarClient({ weekends }: Props) {
           <>
             <p className="text-sm text-white/60">Fim de semana selecionado</p>
             <h3 className="mt-1 text-xl font-semibold text-white sm:text-2xl">
-              {formatDateBR(selectedWeekend.weekendStartISO)} até{" "}
+              {formatDateBR(selectedWeekend.weekendStartISO)} até{' '}
               {formatDateBR(selectedWeekend.weekendEndISO)}
             </h3>
 
