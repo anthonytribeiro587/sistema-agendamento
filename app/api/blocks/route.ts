@@ -1,153 +1,92 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import {
+  databaseErrorResponse,
+  errorBody,
+  requireAdmin,
+} from "@/lib/server/booking-api";
 
-function isAdminEmail(email: string | null | undefined) {
-  const allowed = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (!email) return false;
-  return allowed.includes(email.toLowerCase());
+function normalizeDate(value: unknown) {
+  return String(value ?? "").trim().slice(0, 10);
 }
 
-function normalizeText(value: unknown, max = 500) {
-  return String(value || "").trim().slice(0, max);
-}
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
-
-    const { data: userData } = await supabase.auth.getUser();
-    const email = userData.user?.email;
-
-    if (!userData.user) {
-      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
+    const access = await requireAdmin();
+    if (access.ok === false) {
+      return NextResponse.json(errorBody("AUTH_ERROR", access.message), {
+        status: access.status,
+      });
     }
 
-    if (!isAdminEmail(email)) {
-      return NextResponse.json({ ok: false, message: "Sem permissão." }, { status: 403 });
+    const body = await request.json().catch(() => ({}));
+    const weekendStartISO = normalizeDate(body.weekendStartISO);
+    const reason = String(body.reason ?? "").trim().slice(0, 500);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekendStartISO)) {
+      return NextResponse.json(errorBody("VALIDATION_ERROR", "Data inválida."), {
+        status: 400,
+      });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const weekendStartISO = String(body.weekendStartISO || "");
-    const reason = normalizeText(body.reason, 500);
-
-    if (!weekendStartISO) {
-      return NextResponse.json({ ok: false, message: "Data inválida." }, { status: 400 });
-    }
-
-    const start = new Date(`${weekendStartISO}T00:00:00`);
-    if (isNaN(start.getTime())) {
-      return NextResponse.json({ ok: false, message: "Data inválida." }, { status: 400 });
-    }
-
-    const end = new Date(start);
-    end.setDate(end.getDate() + 2);
-
-    const weekend_start = start.toISOString().slice(0, 10);
-    const weekend_end = end.toISOString().slice(0, 10);
-
-    const { data: existingBlock, error: existingBlockError } = await supabase
-      .from("blocks")
-      .select("id")
-      .eq("weekend_start", weekend_start)
-      .maybeSingle();
-
-    if (existingBlockError) {
-      return NextResponse.json(
-        { ok: false, message: existingBlockError.message },
-        { status: 500 }
-      );
-    }
-
-    if (existingBlock) {
-      return NextResponse.json(
-        { ok: false, message: "Este fim de semana já está bloqueado." },
-        { status: 409 }
-      );
-    }
-
-    const { data: existingBooking, error: existingBookingError } = await supabase
-      .from("bookings")
-      .select("id, status")
-      .eq("weekend_start", weekend_start)
-      .in("status", ["PENDING", "CONFIRMED"])
-      .maybeSingle();
-
-    if (existingBookingError) {
-      return NextResponse.json(
-        { ok: false, message: existingBookingError.message },
-        { status: 500 }
-      );
-    }
-
-    if (existingBooking) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message:
-            "Não é possível bloquear uma data com solicitação pendente ou reserva confirmada.",
-        },
-        { status: 409 }
-      );
-    }
-
-    const { error } = await supabase.from("blocks").insert({
-      weekend_start,
-      weekend_end,
-      reason,
+    const { data, error } = await access.admin.rpc("admin_block_weekend", {
+      p_weekend_start: weekendStartISO,
+      p_reason: reason,
+      p_actor_id: access.user.id,
     });
 
     if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+      const response = databaseErrorResponse(error);
+      return NextResponse.json(response.body, { status: response.status });
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
+    revalidatePath("/disponibilidade");
+    return NextResponse.json({ ok: true, block: data });
+  } catch (error) {
+    console.error("POST /api/blocks failed:", error);
+
     return NextResponse.json(
-      { ok: false, message: e?.message || "Erro inesperado." },
+      errorBody("INTERNAL_ERROR", "Não foi possível bloquear a data."),
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
-
-    const { data: userData } = await supabase.auth.getUser();
-    const email = userData.user?.email;
-
-    if (!userData.user) {
-      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
+    const access = await requireAdmin();
+    if (access.ok === false) {
+      return NextResponse.json(errorBody("AUTH_ERROR", access.message), {
+        status: access.status,
+      });
     }
 
-    if (!isAdminEmail(email)) {
-      return NextResponse.json({ ok: false, message: "Sem permissão." }, { status: 403 });
+    const body = await request.json().catch(() => ({}));
+    const weekendStartISO = normalizeDate(body.weekendStartISO);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekendStartISO)) {
+      return NextResponse.json(errorBody("VALIDATION_ERROR", "Data inválida."), {
+        status: 400,
+      });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const weekendStartISO = String(body.weekendStartISO || "");
-
-    if (!weekendStartISO) {
-      return NextResponse.json({ ok: false, message: "Data inválida." }, { status: 400 });
-    }
-
-    const { error } = await supabase
-      .from("blocks")
-      .delete()
-      .eq("weekend_start", weekendStartISO);
+    const { data, error } = await access.admin.rpc("admin_unblock_weekend", {
+      p_weekend_start: weekendStartISO,
+      p_actor_id: access.user.id,
+    });
 
     if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+      const response = databaseErrorResponse(error);
+      return NextResponse.json(response.body, { status: response.status });
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
+    revalidatePath("/disponibilidade");
+    return NextResponse.json({ ok: true, removed: Boolean(data) });
+  } catch (error) {
+    console.error("DELETE /api/blocks failed:", error);
+
     return NextResponse.json(
-      { ok: false, message: e?.message || "Erro inesperado." },
+      errorBody("INTERNAL_ERROR", "Não foi possível desbloquear a data."),
       { status: 500 }
     );
   }
