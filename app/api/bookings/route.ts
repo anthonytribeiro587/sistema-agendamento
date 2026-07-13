@@ -7,6 +7,7 @@ import {
   errorBody,
   parseBookingInput,
 } from "@/lib/server/booking-api";
+import { notifySecretaryAboutBooking } from "@/lib/server/evolution-notification";
 
 export async function POST(request: Request) {
   try {
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
     }
 
     const booking = Array.isArray(data) ? data[0] : data;
+    const bookingId =
+      booking && typeof booking === "object" && "id" in booking
+        ? String((booking as { id?: unknown }).id ?? "") || null
+        : null;
+
+    // O aviso é enviado somente depois de a solicitação estar salva. Se a Evolution
+    // estiver fora do ar, o pedido continua registrado e a resposta ao visitante não falha.
+    const notification = await notifySecretaryAboutBooking({
+      ...input,
+      bookingId,
+    });
 
     revalidatePath("/disponibilidade");
 
@@ -59,6 +71,7 @@ export async function POST(request: Request) {
         ok: true,
         message: "Solicitação enviada com sucesso.",
         booking,
+        notification: notification.status,
       },
       { status: 201 }
     );
