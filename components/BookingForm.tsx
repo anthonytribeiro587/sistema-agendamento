@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, type FormEvent } from "react";
 
 type Props = {
   weekendStartISO: string;
@@ -15,59 +16,83 @@ type FormState = {
   email: string;
   peopleCount: string;
   notes: string;
+  website: string;
 };
 
-function isEmail(v: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const INITIAL_FORM: FormState = {
+  churchName: "",
+  contactName: "",
+  phone: "",
+  email: "",
+  peopleCount: "",
+  notes: "",
+  website: "",
+};
+
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function formatDateBR(iso: string) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("pt-BR");
+}
 
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString("pt-BR");
+function readErrorMessage(data: unknown) {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as {
+    message?: unknown;
+    error?: unknown | { message?: unknown };
+  };
+
+  if (
+    payload.error &&
+    typeof payload.error === "object" &&
+    "message" in payload.error &&
+    typeof payload.error.message === "string"
+  ) {
+    return payload.error.message;
+  }
+
+  if (typeof payload.error === "string") return payload.error;
+  if (typeof payload.message === "string") return payload.message;
+  return null;
 }
 
 export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
-  const [form, setForm] = useState<FormState>({
-    churchName: "",
-    contactName: "",
-    phone: "",
-    email: "",
-    peopleCount: "",
-    notes: "",
-  });
-
+  const router = useRouter();
+  const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [whatsAppUrl, setWhatsAppUrl] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
-    if (!form.churchName.trim()) return false;
-    if (!form.contactName.trim()) return false;
-    if (!form.phone.trim()) return false;
-    if (!isEmail(form.email)) return false;
-
-    const n = Number(form.peopleCount);
-    if (!n || n < 40 || n > 140) return false;
-
-    return true;
+    const peopleCount = Number(form.peopleCount);
+    return (
+      form.churchName.trim().length >= 2 &&
+      form.contactName.trim().length >= 2 &&
+      form.phone.replace(/\D/g, "").length >= 10 &&
+      isEmail(form.email) &&
+      Number.isInteger(peopleCount) &&
+      peopleCount >= 40 &&
+      peopleCount <= 140
+    );
   }, [form]);
 
-  function onChange<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((s) => ({ ...s, [key]: value }));
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setOkMsg(null);
-    setErrMsg(null);
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
     if (!canSubmit) {
-      setErrMsg(
-        "Preencha os campos corretamente. A quantidade deve ser entre 40 e 140 pessoas."
+      setErrorMessage(
+        "Preencha os campos obrigatórios. A quantidade deve ser entre 40 e 140 pessoas."
       );
       return;
     }
@@ -75,36 +100,35 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
     setLoading(true);
 
     try {
-      const payload = {
-        weekendStartISO,
-        weekendEndISO,
-        churchName: form.churchName.trim(),
-        contactName: form.contactName.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        peopleCount: Number(form.peopleCount),
-        notes: form.notes.trim(),
-      };
-
-      const res = await fetch("/api/bookings", {
+      const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          weekendStartISO,
+          churchName: form.churchName.trim(),
+          contactName: form.contactName.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+          peopleCount: Number(form.peopleCount),
+          notes: form.notes.trim(),
+          website: form.website,
+        }),
       });
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setErrMsg(data?.error || "Erro ao enviar solicitação.");
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setErrorMessage(
+          readErrorMessage(data) || "Não foi possível enviar a solicitação."
+        );
         return;
       }
 
-      const telefoneDestino = "5551995092781";
-
-      const mensagem = `Olá! Gostaria de solicitar uma reserva no Sítio Emanuel.
+      const destination =
+        process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5551995092781";
+      const message = `Olá! Enviei uma solicitação de reserva no Sítio Emanuel.
 
 *Dados da solicitação*
-• Igreja: ${form.churchName}
+• Igreja/grupo: ${form.churchName}
 • Responsável: ${form.contactName}
 • WhatsApp: ${form.phone}
 • E-mail: ${form.email}
@@ -112,77 +136,57 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
 • Data: ${formatDateBR(weekendStartISO)} até ${formatDateBR(weekendEndISO)}
 • Observações: ${form.notes || "Nenhuma"}`;
 
-      const url = `https://wa.me/${telefoneDestino}?text=${encodeURIComponent(
-        mensagem
-      )}`;
-
-      setWhatsAppUrl(url);
-
-      setOkMsg(
-        "Sua solicitação foi enviada com sucesso. Agora nossa equipe irá analisar os dados e confirmar a reserva."
+      setWhatsAppUrl(
+        `https://wa.me/${destination}?text=${encodeURIComponent(message)}`
       );
-
-      setForm({
-        churchName: "",
-        contactName: "",
-        phone: "",
-        email: "",
-        peopleCount: "",
-        notes: "",
-      });
-    } catch (err: any) {
-      setErrMsg(err?.message || "Erro inesperado.");
+      setSuccessMessage(
+        "Sua solicitação foi registrada e ficará em análise até a confirmação da equipe."
+      );
+      setForm(INITIAL_FORM);
+      router.refresh();
+    } catch (error) {
+      console.error("Booking form submit failed:", error);
+      setErrorMessage("Falha de conexão. Verifique sua internet e tente novamente.");
     } finally {
       setLoading(false);
     }
   }
 
-  if (okMsg) {
+  if (successMessage) {
     return (
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
         <div className="flex items-start gap-3">
-          <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-200">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-100">
             ✓
           </div>
-
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <h4 className="text-lg font-semibold text-emerald-100">
               Solicitação enviada
             </h4>
-
-            <p className="mt-2 text-sm text-emerald-50/90">
-              {okMsg}
+            <p className="mt-2 text-sm leading-relaxed text-emerald-50/90">
+              {successMessage}
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              O WhatsApp abaixo é opcional, mas ajuda a equipe a localizar seu pedido
+              mais rapidamente.
             </p>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-              <p className="text-sm font-medium text-white">
-                Próximo passo
-              </p>
-              <p className="mt-2 text-sm text-white/75">
-                Você pode continuar pelo WhatsApp para agilizar o atendimento.
-                Sua solicitação já foi registrada no sistema e ficará como{" "}
-                <span className="font-semibold text-amber-200">PENDENTE</span>{" "}
-                até confirmação da equipe.
-              </p>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               {whatsAppUrl ? (
                 <a
                   href={whatsAppUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-white/90"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-white/90"
                 >
-                  Falar no WhatsApp
+                  Continuar pelo WhatsApp
                 </a>
               ) : null}
-
               <Link
                 href="/disponibilidade"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-5 py-3 text-sm text-white/80 transition hover:bg-white/10"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/15 px-5 py-3 text-sm text-white/80 transition hover:bg-white/10"
               >
-                Voltar para disponibilidade
+                Ver outras datas
               </Link>
             </div>
           </div>
@@ -192,103 +196,140 @@ export default function BookingForm({ weekendStartISO, weekendEndISO }: Props) {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4"
-    >
-      <div>
-        <label className="text-sm text-white/80">Nome da igreja *</label>
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="sr-only" aria-hidden="true">
+        <label htmlFor="website">Website</label>
         <input
-          value={form.churchName}
-          onChange={(e) => onChange("churchName", e.target.value)}
-          placeholder="Ex: Igreja Batista Central"
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+          id="website"
+          name="website"
+          value={form.website}
+          onChange={(event) => updateField("website", event.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
         />
       </div>
 
       <div>
-        <label className="text-sm text-white/80">Responsável *</label>
+        <label htmlFor="churchName" className="text-sm text-white/80">
+          Nome da igreja ou grupo *
+        </label>
         <input
+          id="churchName"
+          value={form.churchName}
+          onChange={(event) => updateField("churchName", event.target.value)}
+          placeholder="Ex.: Igreja Batista Central"
+          autoComplete="organization"
+          maxLength={120}
+          required
+          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="contactName" className="text-sm text-white/80">
+          Responsável *
+        </label>
+        <input
+          id="contactName"
           value={form.contactName}
-          onChange={(e) => onChange("contactName", e.target.value)}
-          placeholder="Ex: Pr. João Silva"
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+          onChange={(event) => updateField("contactName", event.target.value)}
+          placeholder="Ex.: João Silva"
+          autoComplete="name"
+          maxLength={120}
+          required
+          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="text-sm text-white/80">WhatsApp *</label>
+          <label htmlFor="phone" className="text-sm text-white/80">
+            WhatsApp *
+          </label>
           <input
+            id="phone"
             value={form.phone}
-            onChange={(e) => onChange("phone", e.target.value)}
-            placeholder="Ex: (51) 99999-9999"
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+            onChange={(event) => updateField("phone", event.target.value)}
+            placeholder="(51) 99999-9999"
+            inputMode="tel"
+            autoComplete="tel"
+            maxLength={20}
+            required
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
           />
-          <p className="mt-1 text-xs text-white/50">
-            Usaremos este número para confirmar sua reserva.
-          </p>
         </div>
 
         <div>
-          <label className="text-sm text-white/80">E-mail *</label>
+          <label htmlFor="email" className="text-sm text-white/80">
+            E-mail *
+          </label>
           <input
+            id="email"
             type="email"
             value={form.email}
-            onChange={(e) => onChange("email", e.target.value)}
-            placeholder="Ex: contato@igreja.com"
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+            onChange={(event) => updateField("email", event.target.value)}
+            placeholder="contato@igreja.com"
+            autoComplete="email"
+            maxLength={160}
+            required
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
           />
         </div>
       </div>
 
       <div>
-        <label className="text-sm text-white/80">Quantidade de pessoas *</label>
+        <label htmlFor="peopleCount" className="text-sm text-white/80">
+          Quantidade de pessoas *
+        </label>
         <input
+          id="peopleCount"
           type="number"
           min={40}
           max={140}
           value={form.peopleCount}
-          onChange={(e) => onChange("peopleCount", e.target.value)}
-          placeholder="Ex: 80"
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+          onChange={(event) => updateField("peopleCount", event.target.value)}
+          placeholder="Ex.: 80"
+          required
+          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
         />
-        <p className="mt-1 text-xs text-white/50">
-          Permitido entre 40 e 140 pessoas.
-        </p>
+        <p className="mt-1 text-xs text-white/50">Capacidade permitida: 40 a 140 pessoas.</p>
       </div>
 
       <div>
-        <label className="text-sm text-white/80">Observações</label>
+        <label htmlFor="notes" className="text-sm text-white/80">
+          Observações
+        </label>
         <textarea
-          rows={5}
+          id="notes"
+          rows={4}
           value={form.notes}
-          onChange={(e) => onChange("notes", e.target.value)}
-          placeholder="Preferências, horários, necessidades especiais..."
-          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-white/30 outline-none focus:border-white/20"
+          onChange={(event) => updateField("notes", event.target.value)}
+          placeholder="Horários, necessidades especiais ou outras informações..."
+          maxLength={1000}
+          className="mt-2 w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-white/30"
         />
       </div>
 
-      {errMsg ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {errMsg}
+      {errorMessage ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+        >
+          {errorMessage}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-4">
-        <button
-          type="submit"
-          disabled={!canSubmit || loading}
-          className="rounded-2xl bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Enviando..." : "Enviar solicitação"}
-        </button>
+      <button
+        type="submit"
+        disabled={!canSubmit || loading}
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+      >
+        {loading ? "Enviando..." : "Enviar solicitação"}
+      </button>
 
-        <p className="text-sm text-white/70">
-          Sua solicitação ficará como{" "}
-          <b className="text-amber-200">PENDENTE</b> até confirmação.
-        </p>
-      </div>
+      <p className="text-xs leading-relaxed text-white/55">
+        O envio não garante a reserva. A data será confirmada pela equipe após a análise.
+      </p>
     </form>
   );
 }
