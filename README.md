@@ -1,111 +1,104 @@
-# 📅 Sistema de Agendamento – Sítio Emanuel
+# Sistema de Agendamento — Sítio Emanuel
 
-Aplicação web fullstack para gerenciamento de reservas de fins de semana em um sítio, permitindo controle de disponibilidade, solicitação de agendamentos e administração das reservas.
+Aplicação em Next.js para apresentação do espaço, consulta de disponibilidade e gerenciamento de solicitações de reserva de sexta-feira a domingo.
 
-## 🚀 Deploy
-👉 https://sistema-agendamento-beta.vercel.app/
+## O que o sistema faz
 
----
+### Área pública
 
-## 📌 Sobre o projeto
+- Exibe os próximos fins de semana em calendário.
+- Permite solicitações em datas livres ou com outros pedidos ainda em análise.
+- Impede solicitações em datas bloqueadas ou já confirmadas.
+- Registra o pedido como `PENDING` e gera o atalho opcional para WhatsApp.
+- Aplica validação no servidor, campo-isca contra bots e limite por origem.
 
-O sistema foi desenvolvido para resolver o controle manual de reservas, oferecendo uma solução digital para:
+### Área administrativa
 
-- Visualizar datas disponíveis
-- Solicitar reservas
-- Gerenciar pedidos de agendamento
-- Controlar status das reservas
+- Login com Supabase Auth.
+- Listagem e gestão de solicitações.
+- Confirmação, rejeição, cancelamento e reabertura.
+- Reserva manual e bloqueio de datas.
+- Histórico de mudanças de status.
 
----
+## Regras principais
 
-## ⚙️ Funcionalidades
+- Toda reserva começa em uma sexta-feira e termina no domingo.
+- Mais de uma solicitação pode ficar pendente para a mesma data.
+- Apenas uma reserva pode ficar `CONFIRMED` por fim de semana.
+- Ao confirmar uma solicitação, as demais pendentes da data são rejeitadas na mesma transação.
+- Pedidos pendentes expiram após 48 horas e são movidos para rejeitados com motivo de expiração.
+- Bloquear uma data rejeita pedidos pendentes, mas nunca sobrescreve uma reserva confirmada.
 
-### 👤 Público
-- Visualização de calendário com datas disponíveis
-- Solicitação de reserva
-- Status inicial como **PENDING**
+## Stack
 
-### 🔐 Administrativo
-- Login de administrador
-- Visualização de todas as reservas
-- Aprovação (**CONFIRMED**) ou rejeição (**REJECTED**) de pedidos
-- Cancelamento de reservas (**CANCELLED**)
-- Bloqueio manual de datas
-- Gestão de finais de semana (sexta a domingo)
+- Next.js 16 / React 19 / TypeScript
+- Supabase Auth e PostgreSQL
+- Tailwind CSS
+- Vercel
 
----
+## Recuperar o projeto em um Supabase novo
 
-## 🛠️ Tecnologias utilizadas
+### 1. Criar o projeto
 
-- **Frontend:** Next.js (App Router), React, TypeScript  
-- **Backend:** API Routes (Next.js)  
-- **Banco de Dados:** Supabase  
-- **Autenticação:** Supabase Auth  
-- **Estilização:** CSS / Tailwind (se estiver usando)  
-- **Versionamento:** Git / GitHub  
-- **Deploy:** Vercel  
+Crie um projeto vazio no Supabase e aguarde a inicialização do banco.
 
----
+### 2. Executar a migration
 
-## 🧠 Regras de Negócio
+No SQL Editor do Supabase, execute integralmente:
 
-- Reservas públicas são criadas com status **PENDING**
-- Reservas feitas pelo admin são automaticamente **CONFIRMED**
-- Apenas finais de semana (sexta a domingo) são válidos
-- Datas podem ser bloqueadas manualmente
-- Cada reserva passa por validação antes de confirmação
+```text
+supabase/migrations/202607130001_rebuild_booking_system.sql
+```
 
----
+A migration cria tabelas, índices, RLS, funções transacionais e a consulta pública segura da agenda.
 
-## 📂 Estrutura do projeto
-app/
-api/
-bookings/
-blocks/
-admin/
-agenda/
-components/
-lib/
+> A migration foi preparada para um Supabase novo. Não execute sobre uma base antiga com dados reais sem backup e revisão das diferenças de esquema.
 
-## 📸 Demonstração
+### 3. Criar o usuário administrador
 
-### Página inicial
-![Tela inicial](public/SiteEmanuelInicio.png)
+Em **Authentication → Users**, crie o usuário que acessará o painel. Depois execute no SQL Editor, substituindo o e-mail:
 
-### Painel administrativo
-![Painel admin](public/SiteEmanuelAdmin.png)
+```sql
+insert into public.admin_users (user_id, email)
+select id, email
+from auth.users
+where lower(email) = lower('admin@exemplo.com')
+on conflict (user_id) do update
+set email = excluded.email,
+    active = true;
+```
 
-## 💻 Como rodar o projeto localmente
+### 4. Configurar variáveis
 
-# Clonar repositório
-git clone https://github.com/SEU-USUARIO/SEU-REPO
+Copie `.env.example` para `.env.local` no ambiente local e configure as mesmas variáveis na Vercel:
 
-# Entrar na pasta
-cd sistema-agendamento
-
-# Instalar dependências
-npm install
-
-# Rodar o projeto
-npm run dev
-
-🔐 Variáveis de ambiente
-
-Crie um arquivo .env.local:
+```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_ADMIN_EMAILS=admin@exemplo.com
+NEXT_PUBLIC_WHATSAPP_NUMBER=5551995092781
+RATE_LIMIT_SALT=uma-chave-aleatoria-grande
+```
 
-📈 Melhorias futuras
-Notificações por e-mail
-Dashboard com métricas
-Testes automatizados
-Melhorias de UX/UI
-Deploy com domínio próprio
+A `SUPABASE_SERVICE_ROLE_KEY` é somente do servidor. Nunca use essa chave em variável iniciada por `NEXT_PUBLIC_`.
 
-👨‍💻 Autor
+### 5. Instalar e validar
 
-Anthony Thiago da Cruz Ribeiro
+```bash
+npm install
+npm run lint
+npm run build
+npm run dev
+```
 
-- 📧 anthony.tribeiro587@gmail.com
-- 💼 LinkedIn https://www.linkedin.com/in/anthonytcribeiro
+## Fluxo de publicação recomendado
+
+1. Trabalhar em uma branch.
+2. Executar lint e build antes do push.
+3. Fazer um único merge na `main` quando o novo Supabase e as variáveis estiverem prontos.
+4. Validar login, calendário, solicitação pública, confirmação, bloqueio e reserva manual no deploy final.
+
+## Deploy atual
+
+https://sistema-agendamento-beta.vercel.app/
